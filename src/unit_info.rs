@@ -254,6 +254,10 @@ impl Enumeration {
         None
     }
 
+    pub fn variants(&self) -> &[EnumerationVariant] {
+        &self.variants
+    }
+
     pub fn discriminant_offset(&self) -> StructOffset {
         self.discriminant_offset
     }

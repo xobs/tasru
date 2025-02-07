@@ -1,26 +1,24 @@
 pub mod debug_types;
 mod dump;
 pub mod extract;
-pub mod memory_source;
+pub mod memory;
 pub mod unit_info;
 
-use memory_source::MemorySource;
 use object::{Object, ObjectSection};
 use std::borrow;
 use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
-use debug_types::DebugVariable;
+use debug_types::{DebugTypeError, DebugVariable};
 use unit_info::UnitInfo;
 
 pub(crate) type GimliReader = gimli::EndianReader<gimli::LittleEndian, std::rc::Rc<[u8]>>;
 pub(crate) type DwarfReader = gimli::read::EndianRcSlice<gimli::LittleEndian>;
 
-pub struct DebugInfo<'a, S: memory_source::MemorySource> {
+pub struct DebugInfo {
     units: Vec<UnitInfo>,
     symbol_unit_mapping: HashMap<unit_info::DebugItemOffset, usize>,
-    memory_source: &'a S,
 }
 
 #[derive(Debug)]
@@ -62,11 +60,8 @@ impl core::fmt::Display for DebugInfoError {
 
 impl std::error::Error for DebugInfoError {}
 
-impl<'a, S: MemorySource> DebugInfo<'a, S> {
-    pub fn new<P: AsRef<Path>>(
-        file: &P,
-        memory_source: &'a S,
-    ) -> Result<DebugInfo<'a, S>, DebugInfoError> {
+impl DebugInfo {
+    pub fn new<P: AsRef<Path>>(file: &P) -> Result<DebugInfo, DebugInfoError> {
         let mut symbol_unit_mapping = HashMap::new();
         let file = std::fs::read(file)?;
         let object = object::File::parse(file.as_slice())?;
@@ -111,18 +106,20 @@ impl<'a, S: MemorySource> DebugInfo<'a, S> {
 
         Ok(DebugInfo {
             units,
-            memory_source,
             symbol_unit_mapping,
         })
     }
 
-    pub fn variable_from_demangled_name(&'a self, path: &str) -> Option<DebugVariable<'a, S>> {
+    pub fn variable_from_demangled_name(
+        &self,
+        path: &str,
+    ) -> Result<DebugVariable, DebugTypeError> {
         for unit in &self.units {
             if let Some(variable) = unit.variable_from_demangled_name(path) {
-                return Some(DebugVariable::new(unit, self, variable));
+                return Ok(DebugVariable::new(unit, self, variable));
             }
         }
-        None
+        Err(DebugTypeError::VariableNotFound(path.into()))
     }
 
     pub fn size_from_kind(
