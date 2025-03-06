@@ -480,29 +480,9 @@ impl UnitInfo {
             tag_parent_list.pop();
             tag_parent_list.push(abbrev.tag());
 
-            // for _ in 0..depth {
-            //     print!("  ");
-            // }
-            // for tag in &tag_parent_list {
-            //     print!("{}:", tag.static_string().unwrap_or("<unknown>"));
-            // }
-            // println!(
-            //     "<{}> @ {:08x} {}",
-            //     depth,
-            //     abbrev.offset().0,
-            //     abbrev.tag().static_string().unwrap_or("<unknown>")
-            // );
-
             let parent_tag = *tag_parent_list
                 .get(tag_parent_list.len().saturating_sub(2))
                 .unwrap_or(&gimli::constants::DW_TAG_null);
-
-            // if abbrev.tag() == gimli::constants::DW_TAG_member {
-            //     println!(
-            //         "Tag is member and parent tag is: {}",
-            //         parent_tag.static_string().unwrap_or("<unknown>")
-            //     );
-            // }
 
             match abbrev.tag() {
                 gimli::constants::DW_TAG_variable => {
@@ -523,6 +503,17 @@ impl UnitInfo {
                         assert!(demangled_variable_names
                             .insert(
                                 format!("{:#}", rustc_demangle::demangle(linkage_name)),
+                                EntryIndex(variables.len()),
+                            )
+                            .is_none());
+                    }
+                    if &Some(&variable.name) != &variable.linkage_name.as_ref() {
+                        assert!(variable_names
+                            .insert(variable.name.clone(), EntryIndex(variables.len()))
+                            .is_none());
+                        assert!(demangled_variable_names
+                            .insert(
+                                format!("{:#}", rustc_demangle::demangle(&variable.name)),
                                 EntryIndex(variables.len()),
                             )
                             .is_none());
@@ -1035,12 +1026,7 @@ fn parse_variable(
             gimli::constants::DW_AT_location => {
                 location = parse_location(attr, unit_ref);
             }
-            _ => {
-                // println!(
-                //     "Unrecognized: {}",
-                //     attr.name().static_string().unwrap_or("<unknown>")
-                // );
-            }
+            _ => {}
         }
     }
 
