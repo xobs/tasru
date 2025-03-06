@@ -824,6 +824,20 @@ impl<'a> DebugPointer<'a> {
         }
     }
 
+    /// Attempt to follow a pointer. If the pointer is null, return `Ok(None)`.
+    pub fn try_follow<S: Read>(
+        self,
+        memory_source: &mut S,
+    ) -> Result<Option<Self>, DebugTypeError> {
+        let new = self.follow(memory_source)?;
+        let location = &new.location.ok_or(DebugTypeError::ReadError)?;
+        if *location == MemoryLocation(0) {
+            Ok(None)
+        } else {
+            Ok(Some(new))
+        }
+    }
+
     pub fn follow<S: Read>(mut self, memory_source: &mut S) -> Result<Self, DebugTypeError> {
         let location = self.location.ok_or(DebugTypeError::LocationMissing)?.0;
         let target = memory_source
