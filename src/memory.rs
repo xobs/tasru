@@ -1,3 +1,8 @@
+//! Memory traits can be used to read or write data in a given target.
+//! This data may be live (for example communicating with a target via
+//! a debugger or an emulator), or may be at-rest (for example querying
+//! an .ihex image of a running device).
+
 /// A device that can read memory addresses. This may be a live device,
 /// a core dump, or some other operation.
 pub trait Read {
@@ -60,6 +65,7 @@ pub trait Read {
     fn finish(&mut self) {}
 }
 
+/// Write data to the device. This is currently unused in tasru.
 pub trait Write {
     type Error: core::error::Error;
 

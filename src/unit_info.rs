@@ -4,23 +4,24 @@ use std::collections::HashMap;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 /// A location within the debug section
-pub struct DebugItemOffset {
+pub struct DebugItem {
     offset: u64,
 }
 
-impl DebugItemOffset {
+impl DebugItem {
     pub fn from_unit_offset<'a>(
         offset: gimli::UnitOffset,
         unit_ref: gimli::UnitRef<'a, GimliReader>,
     ) -> Option<Self> {
         offset
             .to_debug_info_offset(&unit_ref.unit.header)
-            .map(|offset| DebugItemOffset {
+            .map(|offset| DebugItem {
                 offset: offset.0 as u64,
             })
     }
+
     pub fn from_debug_info_offset(offset: gimli::DebugInfoOffset) -> Self {
-        DebugItemOffset {
+        DebugItem {
             offset: offset.0 as u64,
         }
     }
@@ -105,7 +106,7 @@ impl core::fmt::Display for EntryIndex {
 #[derive(Debug)]
 pub struct StructureMember {
     name: Option<String>,
-    kind: DebugItemOffset,
+    kind: DebugItem,
     offset: StructOffset,
 }
 
@@ -114,7 +115,7 @@ impl StructureMember {
         self.name.as_deref()
     }
 
-    pub fn kind(&self) -> DebugItemOffset {
+    pub fn kind(&self) -> DebugItem {
         self.kind
     }
 
@@ -125,14 +126,14 @@ impl StructureMember {
 
 pub struct Pointer {
     name: Option<String>,
-    kind: DebugItemOffset,
+    kind: DebugItem,
 }
 
 impl Pointer {
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()
     }
-    pub fn kind(&self) -> DebugItemOffset {
+    pub fn kind(&self) -> DebugItem {
         self.kind
     }
 }
@@ -204,7 +205,7 @@ impl Union {
 pub struct EnumerationVariant {
     name: String,
     discriminant: Option<u64>,
-    kind: DebugItemOffset,
+    kind: DebugItem,
     offset: StructOffset,
 }
 
@@ -212,7 +213,7 @@ impl EnumerationVariant {
     pub fn name(&self) -> &str {
         &self.name
     }
-    pub fn kind(&self) -> DebugItemOffset {
+    pub fn kind(&self) -> DebugItem {
         self.kind
     }
     pub fn offset(&self) -> StructOffset {
@@ -227,7 +228,7 @@ impl EnumerationVariant {
 pub struct Enumeration {
     name: String,
     discriminant_offset: StructOffset,
-    discriminant_kind: DebugItemOffset,
+    discriminant_kind: DebugItem,
     size: u64,
     variants: Vec<EnumerationVariant>,
 }
@@ -241,8 +242,20 @@ impl Enumeration {
         self.size
     }
 
-    pub fn variant_at(&self, index: usize) -> Option<&EnumerationVariant> {
-        self.variants.get(index)
+    /// Return the enumeration variant that corresponds to the given discriminant. If the
+    /// enum could not be found, return `None`.
+    pub fn variant_with_discriminant(&self, discriminant: usize) -> Option<&EnumerationVariant> {
+        // If we can get the item from the array directly, get it. Otherwise,
+        // return the variant without a discriminant. This is the case for
+        // niche-optimized enums.
+        self.variants.get(discriminant).or_else(|| {
+            for variant in &self.variants {
+                if variant.discriminant.is_none() {
+                    return Some(variant);
+                }
+            }
+            None
+        })
     }
 
     pub fn variant_named(&self, name: &str) -> Option<&EnumerationVariant> {
@@ -262,7 +275,7 @@ impl Enumeration {
         self.discriminant_offset
     }
 
-    pub fn discriminant_kind(&self) -> DebugItemOffset {
+    pub fn discriminant_kind(&self) -> DebugItem {
         self.discriminant_kind
     }
 }
@@ -273,7 +286,7 @@ pub struct Structure {
     name: String,
     members: Vec<StructureMember>,
     size: u64,
-    containing_type: Option<DebugItemOffset>,
+    containing_type: Option<DebugItem>,
 }
 
 impl Structure {
@@ -296,20 +309,20 @@ impl Structure {
     pub fn size(&self) -> u64 {
         self.size
     }
-    pub fn containing_type(&self) -> Option<DebugItemOffset> {
+    pub fn containing_type(&self) -> Option<DebugItem> {
         self.containing_type
     }
 }
 
 #[derive(Debug)]
 pub struct Array {
-    kind: DebugItemOffset,
+    kind: DebugItem,
     lower_bound: u64,
     count: usize,
 }
 
 impl Array {
-    pub fn kind(&self) -> DebugItemOffset {
+    pub fn kind(&self) -> DebugItem {
         self.kind
     }
     pub fn count(&self) -> usize {
@@ -323,7 +336,7 @@ impl Array {
 /// Arrays are stored as an array_type followed by a subrange_type. This contains
 /// just the array_type.
 struct PartialArray {
-    kind: DebugItemOffset,
+    kind: DebugItem,
 }
 
 /// A tagthat describes the contents of the array
@@ -335,7 +348,7 @@ struct Subrange {
 #[derive(Debug)]
 pub struct Variable {
     name: String,
-    kind: DebugItemOffset,
+    kind: DebugItem,
     location: MemoryLocation,
     linkage_name: Option<String>,
     line: Option<u64>,
@@ -347,7 +360,7 @@ impl Variable {
         &self.name
     }
 
-    pub fn kind(&self) -> DebugItemOffset {
+    pub fn kind(&self) -> DebugItem {
         self.kind
     }
 
@@ -392,25 +405,25 @@ pub struct SymbolCache {
     demangled_variable_names: HashMap<String, EntryIndex>,
 
     /// Pointers from the variable's address to the variable
-    variable_address: HashMap<DebugItemOffset, EntryIndex>,
+    variable_address: HashMap<DebugItem, EntryIndex>,
 
     /// Pointers from the structure's offset to the structure
-    structure_address: HashMap<DebugItemOffset, EntryIndex>,
+    structure_address: HashMap<DebugItem, EntryIndex>,
 
     /// Pointers from the structure's offset to the enumeration
-    enumeration_address: HashMap<DebugItemOffset, EntryIndex>,
+    enumeration_address: HashMap<DebugItem, EntryIndex>,
 
     /// Pointers from the array's offset to the array
-    array_address: HashMap<DebugItemOffset, EntryIndex>,
+    array_address: HashMap<DebugItem, EntryIndex>,
 
     /// Pointers from the pointer's offset to the pointer
-    pointer_address: HashMap<DebugItemOffset, EntryIndex>,
+    pointer_address: HashMap<DebugItem, EntryIndex>,
 
     /// Pointers from the base type's offset to the base type
-    base_type_address: HashMap<DebugItemOffset, EntryIndex>,
+    base_type_address: HashMap<DebugItem, EntryIndex>,
 
     /// Pointers from the union's offset to the union
-    union_address: HashMap<DebugItemOffset, EntryIndex>,
+    union_address: HashMap<DebugItem, EntryIndex>,
 }
 
 /// A struct containing information about a single compilation unit.
@@ -419,7 +432,7 @@ pub struct UnitInfo {
 }
 
 impl UnitInfo {
-    pub fn all_symbols(&self) -> Vec<DebugItemOffset> {
+    pub fn all_symbols(&self) -> Vec<DebugItem> {
         self.cache
             .array_address
             .keys()
@@ -453,9 +466,9 @@ impl UnitInfo {
         let mut base_type_address = HashMap::new();
         let mut union_address = HashMap::new();
 
-        let mut array_in_progress: Option<(PartialArray, DebugItemOffset)> = None;
+        let mut array_in_progress: Option<(PartialArray, DebugItem)> = None;
         let mut tag_parent_list = vec![];
-        let mut last_structure_address: Option<DebugItemOffset> = None;
+        let mut last_structure_address: Option<DebugItem> = None;
 
         let mut entries = unit_ref.entries();
         let mut depth = 0usize;
@@ -490,7 +503,7 @@ impl UnitInfo {
                         continue;
                     };
 
-                    let Some(offset) = DebugItemOffset::from_unit_offset(abbrev.offset(), unit_ref)
+                    let Some(offset) = DebugItem::from_unit_offset(abbrev.offset(), unit_ref)
                     else {
                         continue;
                     };
@@ -539,7 +552,7 @@ impl UnitInfo {
                     // TODO: Parse `discr` type. For now we just assume it's the first one.
                     enumerations.push(Enumeration {
                         name: structure.name,
-                        discriminant_kind: DebugItemOffset::from_debug_info_offset(
+                        discriminant_kind: DebugItem::from_debug_info_offset(
                             gimli::DebugInfoOffset(0),
                         ),
                         discriminant_offset: StructOffset(0),
@@ -566,9 +579,7 @@ impl UnitInfo {
                         last_enum.variants.push(EnumerationVariant {
                             name: String::new(),
                             discriminant,
-                            kind: DebugItemOffset::from_debug_info_offset(gimli::DebugInfoOffset(
-                                0,
-                            )),
+                            kind: DebugItem::from_debug_info_offset(gimli::DebugInfoOffset(0)),
                             offset: StructOffset(0),
                         });
                     }
@@ -611,7 +622,7 @@ impl UnitInfo {
                     let Some(structure) = parse_structure(abbrev.attrs(), unit_ref) else {
                         continue;
                     };
-                    let Some(offset) = DebugItemOffset::from_unit_offset(abbrev.offset(), unit_ref)
+                    let Some(offset) = DebugItem::from_unit_offset(abbrev.offset(), unit_ref)
                     else {
                         continue;
                     };
@@ -626,7 +637,7 @@ impl UnitInfo {
                     let Some(new_union) = parse_union(abbrev.attrs(), unit_ref) else {
                         continue;
                     };
-                    let Some(offset) = DebugItemOffset::from_unit_offset(abbrev.offset(), unit_ref)
+                    let Some(offset) = DebugItem::from_unit_offset(abbrev.offset(), unit_ref)
                     else {
                         continue;
                     };
@@ -638,7 +649,7 @@ impl UnitInfo {
                 }
 
                 gimli::constants::DW_TAG_array_type => {
-                    let Some(offset) = DebugItemOffset::from_unit_offset(abbrev.offset(), unit_ref)
+                    let Some(offset) = DebugItem::from_unit_offset(abbrev.offset(), unit_ref)
                     else {
                         continue;
                     };
@@ -672,7 +683,7 @@ impl UnitInfo {
                     };
                     assert!(pointer_address
                         .insert(
-                            DebugItemOffset::from_debug_info_offset(offset),
+                            DebugItem::from_debug_info_offset(offset),
                             EntryIndex(pointers.len())
                         )
                         .is_none());
@@ -688,7 +699,7 @@ impl UnitInfo {
                     };
                     assert!(base_type_address
                         .insert(
-                            DebugItemOffset::from_debug_info_offset(offset),
+                            DebugItem::from_debug_info_offset(offset),
                             EntryIndex(base_types.len())
                         )
                         .is_none());
@@ -739,56 +750,56 @@ impl UnitInfo {
             .and_then(|addr| self.cache.variables.get(addr.0))
     }
 
-    pub fn variable_from_kind(&self, location: DebugItemOffset) -> Option<&Variable> {
+    pub fn variable_from_item(&self, location: DebugItem) -> Option<&Variable> {
         self.cache
             .variable_address
             .get(&location)
             .and_then(|addr| self.cache.variables.get(addr.0))
     }
 
-    pub fn structure_from_kind(&self, location: DebugItemOffset) -> Option<&Structure> {
+    pub fn structure_from_item(&self, location: DebugItem) -> Option<&Structure> {
         self.cache
             .structure_address
             .get(&location)
             .and_then(|addr| self.cache.structures.get(addr.0))
     }
 
-    pub fn enumeration_from_kind(&self, location: DebugItemOffset) -> Option<&Enumeration> {
+    pub fn enumeration_from_item(&self, location: DebugItem) -> Option<&Enumeration> {
         self.cache
             .enumeration_address
             .get(&location)
             .and_then(|addr| self.cache.enumerations.get(addr.0))
     }
 
-    pub fn array_from_kind(&self, location: DebugItemOffset) -> Option<&Array> {
+    pub fn array_from_item(&self, location: DebugItem) -> Option<&Array> {
         self.cache
             .array_address
             .get(&location)
             .and_then(|addr| self.cache.arrays.get(addr.0))
     }
 
-    pub fn pointer_from_kind(&self, location: DebugItemOffset) -> Option<&Pointer> {
+    pub fn pointer_from_item(&self, location: DebugItem) -> Option<&Pointer> {
         self.cache
             .pointer_address
             .get(&location)
             .and_then(|addr| self.cache.pointers.get(addr.0))
     }
 
-    pub fn base_type_from_kind(&self, location: DebugItemOffset) -> Option<&BaseType> {
+    pub fn base_type_from_item(&self, location: DebugItem) -> Option<&BaseType> {
         self.cache
             .base_type_address
             .get(&location)
             .and_then(|addr| self.cache.base_types.get(addr.0))
     }
 
-    pub fn union_from_kind(&self, location: DebugItemOffset) -> Option<&Union> {
+    pub fn union_from_item(&self, location: DebugItem) -> Option<&Union> {
         self.cache
             .union_address
             .get(&location)
             .and_then(|addr| self.cache.unions.get(addr.0))
     }
 
-    pub fn size_from_kind(&self, location: DebugItemOffset) -> Option<StructOffset> {
+    pub fn size_from_item(&self, location: DebugItem) -> Option<StructOffset> {
         if let Some(val) = self
             .cache
             .structure_address
@@ -804,14 +815,16 @@ impl UnitInfo {
         {
             Some(StructOffset(val.size))
         } else if let Some(_val) = self.cache.array_address.get(&location) {
-            panic!("Unable to get size of array");
+            // Unable to get size of array
+            None
         } else if let Some(_val) = self
             .cache
             .pointer_address
             .get(&location)
             .and_then(|addr| self.cache.pointers.get(addr.0))
         {
-            panic!("Unable to get size of pointer");
+            // Unable to get size of pointer
+            None
         } else if let Some(val) = self
             .cache
             .base_type_address
@@ -827,15 +840,15 @@ impl UnitInfo {
         {
             Some(StructOffset(val.size))
         } else {
-            println!(
-                "Unknown kind @ {:08x} -- can't determine size",
-                location.offset
-            );
+            // println!(
+            //     "Unknown kind @ {:08x} -- can't determine size",
+            //     location.offset
+            // );
             None
         }
     }
 
-    pub fn name_from_kind(&self, location: DebugItemOffset) -> Option<&str> {
+    pub fn name_from_kind(&self, location: DebugItem) -> Option<&str> {
         if let Some(val) = self
             .cache
             .structure_address
@@ -856,7 +869,8 @@ impl UnitInfo {
             .get(&location)
             .and_then(|addr| self.cache.arrays.get(addr.0))
         {
-            panic!("Unable to get size of array");
+            // Unable to get name of array
+            None
         } else if let Some(val) = self
             .cache
             .pointer_address
@@ -879,10 +893,10 @@ impl UnitInfo {
         {
             Some(val.name())
         } else {
-            println!(
-                "Unknown kind @ {:08x} -- can't determine name",
-                location.offset
-            );
+            // println!(
+            //     "Unknown kind @ {:08x} -- can't determine name",
+            //     location.offset
+            // );
             None
         }
     }
@@ -904,11 +918,11 @@ fn parse_string(
 fn parse_type(
     attr: gimli::Attribute<GimliReader>,
     unit_ref: gimli::UnitRef<GimliReader>,
-) -> Option<DebugItemOffset> {
+) -> Option<DebugItem> {
     if let gimli::AttributeValue::UnitRef(offset) = attr.value() {
-        DebugItemOffset::from_unit_offset(offset, unit_ref)
+        DebugItem::from_unit_offset(offset, unit_ref)
     } else if let gimli::AttributeValue::DebugInfoRef(val) = attr.value() {
-        Some(DebugItemOffset::from_debug_info_offset(val))
+        Some(DebugItem::from_debug_info_offset(val))
     } else {
         panic!("Unknown type index: {:?}", attr.value());
     }
@@ -1061,6 +1075,10 @@ fn parse_structure(
             gimli::constants::DW_AT_alignment => {}
             gimli::constants::DW_AT_accessibility => {}
             gimli::constants::DW_AT_containing_type => containing_type = parse_type(attr, unit_ref),
+            gimli::constants::DW_AT_decl_line => {}
+            gimli::constants::DW_AT_decl_file => {}
+            gimli::constants::DW_AT_declaration => {}
+            gimli::constants::DW_AT_calling_convention => {}
             _ => {
                 println!(
                     "Unrecognized struct field: {}",
@@ -1094,6 +1112,10 @@ fn parse_union(
             gimli::constants::DW_AT_byte_size => size = attr.udata_value(),
             gimli::constants::DW_AT_alignment => {}
             gimli::constants::DW_AT_accessibility => {}
+            gimli::constants::DW_AT_decl_line => {}
+            gimli::constants::DW_AT_decl_file => {}
+            gimli::constants::DW_AT_declaration => {}
+            gimli::constants::DW_AT_calling_convention => {}
             // gimli::constants::DW_AT_containing_type => containing_type = parse_type(attr, unit_ref),
             _ => {
                 println!(
@@ -1128,6 +1150,11 @@ fn parse_structure_member(
             gimli::constants::DW_AT_data_member_location => offset = parse_offset(attr, unit_ref),
             gimli::constants::DW_AT_alignment => {}
             gimli::constants::DW_AT_accessibility => {}
+            gimli::constants::DW_AT_decl_line => {}
+            gimli::constants::DW_AT_decl_file => {}
+            gimli::constants::DW_AT_declaration => {}
+            gimli::constants::DW_AT_data_bit_offset => {}
+            gimli::constants::DW_AT_bit_size => {}
             _ => {
                 println!(
                     "Unrecognized struct member attr: {}",
@@ -1232,6 +1259,7 @@ fn parse_array(
     while let Ok(Some(attr)) = attrs.next() {
         match attr.name() {
             gimli::constants::DW_AT_type => kind = parse_type(attr, unit_ref),
+            gimli::constants::DW_AT_GNU_vector => {}
             _ => {
                 println!(
                     "Unrecognized array attr: {}",

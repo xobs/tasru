@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::{
     memory::Read,
-    unit_info::{self, MemoryLocation, StructOffset},
+    unit_info::{self, EnumerationVariant, MemoryLocation, StructOffset},
     DebugInfo,
 };
 
@@ -129,7 +129,7 @@ pub struct DebugArrayItem<'a> {
     info: &'a DebugInfo,
     location: Option<unit_info::MemoryLocation>,
     offset: unit_info::StructOffset,
-    kind: unit_info::DebugItemOffset,
+    kind: unit_info::DebugItem,
     parent_name: String,
 }
 
@@ -143,10 +143,13 @@ impl<'a> core::fmt::Debug for DebugArrayItem<'a> {
     }
 }
 
+/// An item stored within an array. The item may be a Structure, an Enumeration,
+/// or a BaseType of u8.
 impl<'a> DebugArrayItem<'a> {
+    /// If the Array is an array of structs, return the underlying Structure object.
     pub fn structure(&self) -> Result<DebugStructure<'a>, DebugTypeError> {
         self.info
-            .structure_from_kind(self.kind)
+            .structure_from_item(self.kind)
             .map(|structure| DebugStructure {
                 unit: self.unit,
                 info: self.info,
@@ -158,9 +161,11 @@ impl<'a> DebugArrayItem<'a> {
                 owner: self.parent_name.clone(),
             })
     }
+
+    /// If the Array is an array of enums, return the underlying Enumeration object.
     pub fn enumeration(&self) -> Result<DebugEnumeration<'a>, DebugTypeError> {
         self.info
-            .enumeration_from_kind(self.kind)
+            .enumeration_from_item(self.kind)
             .map(|enumeration| DebugEnumeration {
                 unit: self.unit,
                 info: self.info,
@@ -172,9 +177,12 @@ impl<'a> DebugArrayItem<'a> {
                 owner: self.parent_name.clone(),
             })
     }
+
+    /// Treat the Array as a `u8`. This can be useful for reading strings, which are
+    /// generally stored as arrays of u8 values.
     pub fn u8<S: Read>(&self, memory_source: &mut S) -> Option<u8> {
         if let Some(location) = self.location {
-            if let Some(base_type) = self.info.base_type_from_kind(self.kind) {
+            if let Some(base_type) = self.info.base_type_from_item(self.kind) {
                 if base_type.size() == 1 {
                     return memory_source.read_u8(location.0).ok();
                 }
@@ -184,6 +192,7 @@ impl<'a> DebugArrayItem<'a> {
     }
 }
 
+/// An iterator over array items.
 pub struct DebugArrayIterator<'a> {
     unit: &'a unit_info::UnitInfo,
     info: &'a DebugInfo,
@@ -218,6 +227,8 @@ impl<'a> Iterator for DebugArrayIterator<'a> {
     }
 }
 
+/// An array of values in memory. The size of the array is taken from the Dwarf data and
+/// is fixed at compile time.
 pub struct DebugArray<'a> {
     unit: &'a unit_info::UnitInfo,
     info: &'a DebugInfo,
@@ -229,7 +240,7 @@ pub struct DebugArray<'a> {
 
 impl<'a> DebugArray<'a> {
     pub fn structure(&self) -> Option<DebugStructure<'a>> {
-        if let Some(structure) = self.info.structure_from_kind(self.array.kind()) {
+        if let Some(structure) = self.info.structure_from_item(self.array.kind()) {
             Some(DebugStructure {
                 unit: self.unit,
                 info: self.info,
@@ -243,7 +254,7 @@ impl<'a> DebugArray<'a> {
     }
 
     pub fn enumeration(&self) -> Option<DebugEnumeration<'a>> {
-        if let Some(enumeration) = self.info.enumeration_from_kind(self.array.kind()) {
+        if let Some(enumeration) = self.info.enumeration_from_item(self.array.kind()) {
             Some(DebugEnumeration {
                 unit: self.unit,
                 info: self.info,
@@ -257,16 +268,12 @@ impl<'a> DebugArray<'a> {
     }
 
     pub fn iter(&self) -> Result<DebugArrayIterator<'a>, DebugTypeError> {
-        let element_size = self.info.size_from_kind(self.array.kind()).ok_or_else(|| {
+        let element_size = self.info.size_from_item(self.array.kind()).ok_or_else(|| {
             DebugTypeError::KindNotFound {
                 owner: self.parent_name.clone(),
                 member: None,
             }
         })?;
-        // let name = self.unit.name_from_kind(self.array.kind())?;
-        // println!("Item is {} bytes long and is called {}", element_size, name);
-        // println!("WARNING! Setting count to 2");
-        // let count = 2; // Should be self.count()
         let count = self.count();
         Ok(DebugArrayIterator {
             unit: self.unit,
@@ -383,42 +390,42 @@ impl<'a> DebugStructureMember<'a> {
         let member = self.structure_member.name().map(|s| s.to_owned());
         let attempted = attempted.to_owned();
         let kind_index = self.structure_member.kind();
-        if self.info.structure_from_kind(kind_index).is_some() {
+        if self.info.structure_from_item(kind_index).is_some() {
             DebugTypeError::KindIncorrect {
                 owner: self.parent_name.clone(),
                 member,
                 attempted,
                 actual: "structure".to_owned(),
             }
-        } else if self.info.enumeration_from_kind(kind_index).is_some() {
+        } else if self.info.enumeration_from_item(kind_index).is_some() {
             DebugTypeError::KindIncorrect {
                 owner: self.parent_name.clone(),
                 member,
                 attempted,
                 actual: "enumeration".to_owned(),
             }
-        } else if self.info.pointer_from_kind(kind_index).is_some() {
+        } else if self.info.pointer_from_item(kind_index).is_some() {
             DebugTypeError::KindIncorrect {
                 owner: self.parent_name.clone(),
                 member,
                 attempted,
                 actual: "pointer".to_owned(),
             }
-        } else if self.info.array_from_kind(kind_index).is_some() {
+        } else if self.info.array_from_item(kind_index).is_some() {
             DebugTypeError::KindIncorrect {
                 owner: self.parent_name.clone(),
                 member,
                 attempted,
                 actual: "array".to_owned(),
             }
-        } else if self.info.union_from_kind(kind_index).is_some() {
+        } else if self.info.union_from_item(kind_index).is_some() {
             DebugTypeError::KindIncorrect {
                 owner: self.parent_name.clone(),
                 member,
                 attempted,
                 actual: "union".to_owned(),
             }
-        } else if self.info.base_type_from_kind(kind_index).is_some() {
+        } else if self.info.base_type_from_item(kind_index).is_some() {
             DebugTypeError::KindIncorrect {
                 owner: self.parent_name.clone(),
                 member,
@@ -435,7 +442,7 @@ impl<'a> DebugStructureMember<'a> {
 
     pub fn structure(&self) -> Result<DebugStructure<'a>, DebugTypeError> {
         self.info
-            .structure_from_kind(self.structure_member.kind())
+            .structure_from_item(self.structure_member.kind())
             .map(|structure| DebugStructure {
                 unit: self.unit,
                 info: self.info,
@@ -448,7 +455,7 @@ impl<'a> DebugStructureMember<'a> {
 
     pub fn enumeration(&self) -> Result<DebugEnumeration<'a>, DebugTypeError> {
         self.info
-            .enumeration_from_kind(self.structure_member.kind())
+            .enumeration_from_item(self.structure_member.kind())
             .map(|enumeration| DebugEnumeration {
                 unit: self.unit,
                 info: self.info,
@@ -461,7 +468,7 @@ impl<'a> DebugStructureMember<'a> {
 
     pub fn pointer(&self) -> Result<DebugPointer<'a>, DebugTypeError> {
         self.info
-            .pointer_from_kind(self.structure_member.kind())
+            .pointer_from_item(self.structure_member.kind())
             .map(|pointer| DebugPointer {
                 unit: self.unit,
                 info: self.info,
@@ -475,7 +482,7 @@ impl<'a> DebugStructureMember<'a> {
 
     pub fn array(&self) -> Result<DebugArray<'a>, DebugTypeError> {
         self.info
-            .array_from_kind(self.structure_member.kind())
+            .array_from_item(self.structure_member.kind())
             .map(|array| DebugArray {
                 unit: self.unit,
                 info: self.info,
@@ -489,7 +496,7 @@ impl<'a> DebugStructureMember<'a> {
 
     pub fn union(&self) -> Result<DebugUnion<'a>, DebugTypeError> {
         self.info
-            .union_from_kind(self.structure_member.kind())
+            .union_from_item(self.structure_member.kind())
             .map(|union| DebugUnion {
                 unit: self.unit,
                 info: self.info,
@@ -502,7 +509,7 @@ impl<'a> DebugStructureMember<'a> {
 
     pub fn base_type(&self) -> Result<DebugBaseType<'a>, DebugTypeError> {
         self.info
-            .base_type_from_kind(self.structure_member.kind())
+            .base_type_from_item(self.structure_member.kind())
             .map(|base_type| DebugBaseType {
                 location: self.location.map(|l| l + self.structure_member.offset()),
                 offset: self.offset + self.structure_member.offset(),
@@ -659,12 +666,12 @@ pub struct DebugSlice<'a> {
 
 impl<'a> DebugSlice<'a> {
     pub fn base_type_iter(&self) -> Result<DebugSliceBaseTypeIter<'a>, DebugTypeError> {
-        let Some(base_type) = self.info.base_type_from_kind(self.data_ptr.kind()) else {
+        let Some(base_type) = self.info.base_type_from_item(self.data_ptr.kind()) else {
             return Err(DebugTypeError::BaseTypeNotFound {
                 owner: self.parent_name.clone(),
             });
         };
-        let Some(element_size) = self.info.size_from_kind(self.data_ptr.kind()) else {
+        let Some(element_size) = self.info.size_from_item(self.data_ptr.kind()) else {
             return Err(DebugTypeError::KindNotFound {
                 owner: "<todo>".into(),
                 member: None,
@@ -683,13 +690,13 @@ impl<'a> DebugSlice<'a> {
     pub fn structure_iter(&self) -> Result<DebugSliceStructureIter<'a>, DebugTypeError> {
         let structure = self
             .info
-            .structure_from_kind(self.data_ptr.kind())
+            .structure_from_item(self.data_ptr.kind())
             .ok_or_else(|| DebugTypeError::StructureNotFound {
                 owner: self.parent_name.clone(),
             })?;
         let element_size = self
             .info
-            .size_from_kind(self.data_ptr.kind())
+            .size_from_item(self.data_ptr.kind())
             .ok_or_else(|| DebugTypeError::KindNotFound {
                 owner: self.parent_name.clone(),
                 member: None,
@@ -798,7 +805,7 @@ pub struct DebugPointer<'a> {
 impl<'a> DebugPointer<'a> {
     pub fn structure(&self) -> Result<DebugStructure<'a>, DebugTypeError> {
         self.info
-            .structure_from_kind(self.pointer.kind())
+            .structure_from_item(self.pointer.kind())
             .map(|structure| DebugStructure {
                 unit: self.unit,
                 structure,
@@ -884,7 +891,7 @@ pub struct DebugEnumerationVariant<'a> {
 impl<'a> DebugEnumerationVariant<'a> {
     pub fn structure(&self) -> Result<DebugStructure<'a>, DebugTypeError> {
         self.info
-            .structure_from_kind(self.variant.kind())
+            .structure_from_item(self.variant.kind())
             .map(|structure| DebugStructure {
                 unit: self.unit,
                 info: self.info,
@@ -895,6 +902,9 @@ impl<'a> DebugEnumerationVariant<'a> {
             .ok_or_else(|| DebugTypeError::StructureNotFound {
                 owner: self.parent_name.clone(),
             })
+    }
+    pub fn variant(&self) -> &EnumerationVariant {
+        &self.variant
     }
 }
 
@@ -927,16 +937,21 @@ impl<'a> DebugEnumeration<'a> {
     pub fn discriminant_size(&self) -> Result<u64, DebugTypeError> {
         let discriminant = self
             .info
-            .base_type_from_kind(self.enumeration.discriminant_kind())
+            .base_type_from_item(self.enumeration.discriminant_kind())
             .ok_or_else(|| DebugTypeError::BaseTypeNotFound {
                 owner: self.enumeration.name().to_owned(),
             })?;
         Ok(discriminant.size())
     }
 
-    pub fn variant_at(&self, index: usize) -> Result<DebugEnumerationVariant<'a>, DebugTypeError> {
+    /// Look through the list of variants and get the variant with the
+    /// discriminant that matches the given index.
+    pub fn variant_with_discriminant(
+        &self,
+        discriminant: usize,
+    ) -> Result<DebugEnumerationVariant<'a>, DebugTypeError> {
         self.enumeration
-            .variant_at(index)
+            .variant_with_discriminant(discriminant)
             .map(|variant| DebugEnumerationVariant {
                 unit: self.unit,
                 info: self.info,
@@ -947,10 +962,11 @@ impl<'a> DebugEnumeration<'a> {
             })
             .ok_or_else(|| DebugTypeError::VariantNotFound {
                 owner: self.enumeration.name().to_owned(),
-                variant: format!("{}", index),
+                variant: format!("{}", discriminant),
             })
     }
 
+    /// Return the enum variant with the given name. If no variant could be found, return `None`.
     pub fn variant_named(&self, name: &str) -> Result<DebugEnumerationVariant<'a>, DebugTypeError> {
         self.enumeration
             .variant_named(name)
@@ -989,7 +1005,7 @@ impl<'a> DebugEnumeration<'a> {
         Ok(variants)
     }
 
-    /// Returns the currently-selected variant, if one is available
+    /// Returns the currently-selected variant, if one is available.
     pub fn variant<S: Read>(
         &self,
         memory_source: &mut S,
@@ -997,7 +1013,7 @@ impl<'a> DebugEnumeration<'a> {
         let address = self.location.ok_or(DebugTypeError::LocationMissing)?.0;
         let discriminant_size = self
             .info
-            .size_from_kind(self.discriminant_kind())
+            .size_from_item(self.discriminant_kind())
             .ok_or_else(|| DebugTypeError::KindNotFound {
                 owner: self.enumeration.name().to_owned(),
                 member: None,
@@ -1020,7 +1036,7 @@ impl<'a> DebugEnumeration<'a> {
                 .map_err(|_| DebugTypeError::ReadError)?,
             size => return Err(DebugTypeError::SizeError(size)),
         };
-        self.variant_at(discriminant as usize)
+        self.variant_with_discriminant(discriminant as usize)
     }
 }
 
@@ -1062,7 +1078,7 @@ impl<'a> DebugVariable<'a> {
 
     pub fn structure(&self) -> Result<DebugStructure<'a>, DebugTypeError> {
         self.info
-            .structure_from_kind(self.variable.kind())
+            .structure_from_item(self.variable.kind())
             .map(|structure| DebugStructure {
                 unit: self.unit,
                 info: self.info,
@@ -1077,7 +1093,7 @@ impl<'a> DebugVariable<'a> {
 
     pub fn enumeration(&self) -> Result<DebugEnumeration<'a>, DebugTypeError> {
         self.info
-            .enumeration_from_kind(self.variable.kind())
+            .enumeration_from_item(self.variable.kind())
             .map(|enumeration| DebugEnumeration {
                 unit: self.unit,
                 info: self.info,
@@ -1092,7 +1108,7 @@ impl<'a> DebugVariable<'a> {
 
     pub fn array(&self) -> Result<DebugArray<'a>, DebugTypeError> {
         self.info
-            .array_from_kind(self.variable.kind())
+            .array_from_item(self.variable.kind())
             .map(|array| DebugArray {
                 unit: self.unit,
                 info: self.info,
