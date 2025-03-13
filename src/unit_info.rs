@@ -1,5 +1,5 @@
 use super::GimliReader;
-use gimli::Reader;
+use gimli::{DW_AT_name, Reader};
 use std::collections::HashMap;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
@@ -470,6 +470,8 @@ impl UnitInfo {
         let mut tag_parent_list = vec![];
         let mut last_structure_address: Option<DebugItem> = None;
 
+        let mut parent_namespace = vec![];
+
         let mut entries = unit_ref.entries();
         let mut depth = 0usize;
         while let Ok(Some((depth_delta, abbrev))) = entries.next_dfs() {
@@ -485,7 +487,13 @@ impl UnitInfo {
                 depth = depth.saturating_add(depth_delta as usize);
             };
 
-            tag_parent_list.truncate(depth);
+            // Truncate the parent list, removing any namespace tags along the way.
+            while tag_parent_list.len() > depth {
+                if Some(gimli::constants::DW_TAG_namespace) == tag_parent_list.pop() {
+                    parent_namespace.pop();
+                }
+            }
+
             // Build the tag parent list up to the current depth.
             while tag_parent_list.len() <= depth {
                 tag_parent_list.push(gimli::constants::DW_TAG_null);
@@ -499,7 +507,9 @@ impl UnitInfo {
 
             match abbrev.tag() {
                 gimli::constants::DW_TAG_variable => {
-                    let Some(variable) = parse_variable(abbrev.attrs(), unit_ref) else {
+                    let Some(variable) =
+                        parse_variable(abbrev.attrs(), &parent_namespace, unit_ref)
+                    else {
                         continue;
                     };
 
@@ -508,28 +518,43 @@ impl UnitInfo {
                         continue;
                     };
 
-                    // If the name exists, add it to the name lookup table.
+                    let demangled_name = format!("{:#}", rustc_demangle::demangle(&variable.name));
+
+                    // If the linkage name exists, add it to the name lookup table. The linkage
+                    // name may be demangled or not, and may be different from the variable name.
+                    // Generally, the linkage name is the one used.
                     if let Some(linkage_name) = &variable.linkage_name {
                         assert!(variable_names
                             .insert(linkage_name.clone(), EntryIndex(variables.len()))
                             .is_none());
-                        assert!(demangled_variable_names
-                            .insert(
-                                format!("{:#}", rustc_demangle::demangle(linkage_name)),
-                                EntryIndex(variables.len()),
-                            )
-                            .is_none());
-                    }
-                    if &Some(&variable.name) != &variable.linkage_name.as_ref() {
-                        assert!(variable_names
-                            .insert(variable.name.clone(), EntryIndex(variables.len()))
-                            .is_none());
-                        assert!(demangled_variable_names
-                            .insert(
-                                format!("{:#}", rustc_demangle::demangle(&variable.name)),
-                                EntryIndex(variables.len()),
-                            )
-                            .is_none());
+                        let demangled_linkage_name =
+                            format!("{:#}", rustc_demangle::demangle(linkage_name));
+                        if demangled_linkage_name != demangled_name {
+                            assert!(demangled_variable_names
+                                .insert(demangled_linkage_name, EntryIndex(variables.len()))
+                                .is_none());
+                        }
+
+                        // Add the ordinary variable name if it's different from the linkage name.
+                        if &Some(&variable.name) != &variable.linkage_name.as_ref() {
+                            assert!(
+                                variable_names
+                                    .insert(variable.name.clone(), EntryIndex(variables.len()))
+                                    .is_none(),
+                                "Variable name {} (linkage name {:?}) @ {:08x?} was found twice!",
+                                variable.name,
+                                variable.linkage_name,
+                                variable.location
+                            );
+
+                            // It may be that the linkage name, when demangled, is the same as the
+                            // variable name. This is because we add the namespace information to
+                            // disambiguate variables with the same name in different namespaces.
+                            // Ignore duplicates where the address is the same.
+                            assert!(demangled_variable_names
+                                .insert(demangled_name, EntryIndex(variables.len()))
+                                .is_none());
+                        }
                     }
                     assert!(variable_address
                         .insert(offset, EntryIndex(variables.len()),)
@@ -704,6 +729,18 @@ impl UnitInfo {
                         )
                         .is_none());
                     base_types.push(base_type);
+                }
+
+                gimli::constants::DW_TAG_namespace => {
+                    let Ok(Some(name)) = abbrev.attr_value(DW_AT_name) else {
+                        println!("name not found for namespace!");
+                        continue;
+                    };
+                    let Some(name) = parse_string(name, unit_ref) else {
+                        println!("couldn't parse name");
+                        continue;
+                    };
+                    parent_namespace.push(name);
                 }
                 _tag => {
                     // println!(
@@ -1019,6 +1056,7 @@ fn parse_filename(
 
 fn parse_variable(
     mut attrs: gimli::AttrsIter<GimliReader>,
+    parents: &[String],
     unit_ref: gimli::UnitRef<GimliReader>,
 ) -> Option<Variable> {
     let mut name = None;
@@ -1044,7 +1082,9 @@ fn parse_variable(
         }
     }
 
-    if let Some(name) = name {
+    if let Some(mut name) = name {
+        let namespace = parents.join("::");
+        name = format!("{namespace}::{name}");
         if let Some(kind) = kind {
             if let Some(location) = location {
                 return Some(Variable {

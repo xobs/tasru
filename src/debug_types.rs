@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::{
     memory::Read,
-    unit_info::{self, EnumerationVariant, MemoryLocation, StructOffset},
+    unit_info::{self, MemoryLocation, StructOffset},
     DebugInfo,
 };
 
@@ -902,9 +902,6 @@ impl<'a> DebugEnumerationVariant<'a> {
             .ok_or_else(|| DebugTypeError::StructureNotFound {
                 owner: self.parent_name.clone(),
             })
-    }
-    pub fn variant(&self) -> &EnumerationVariant {
-        &self.variant
     }
 }
 
