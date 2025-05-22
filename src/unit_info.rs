@@ -1,6 +1,8 @@
 use gimli::{DW_AT_name, Endianity, Reader};
 use std::collections::HashMap;
 
+use crate::GimliReader;
+
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 /// A location within the debug section
 pub struct DebugItem {
@@ -10,7 +12,7 @@ pub struct DebugItem {
 impl DebugItem {
     pub fn from_unit_offset<ENDIAN: Endianity>(
         offset: gimli::UnitOffset,
-        unit_ref: gimli::UnitRef<'_, gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+        unit_ref: gimli::UnitRef<'_, GimliReader<ENDIAN>>,
     ) -> Option<Self> {
         offset
             .to_debug_info_offset(&unit_ref.unit.header)
@@ -191,7 +193,9 @@ impl Union {
     }
 
     pub fn member_named(&self, name: &str) -> Option<&StructureMember> {
-        self.members.iter().find(|&member| member.name.as_deref() == Some(name))
+        self.members
+            .iter()
+            .find(|&member| member.name.as_deref() == Some(name))
     }
 }
 
@@ -243,7 +247,9 @@ impl Enumeration {
         // return the variant without a discriminant. This is the case for
         // niche-optimized enums.
         self.variants.get(discriminant).or_else(|| {
-            self.variants.iter().find(|&variant| variant.discriminant.is_none())
+            self.variants
+                .iter()
+                .find(|&variant| variant.discriminant.is_none())
         })
     }
 
@@ -283,7 +289,9 @@ impl Structure {
     }
 
     pub fn member_named(&self, name: &str) -> Option<&StructureMember> {
-        self.members.iter().find(|&member| member.name.as_deref() == Some(name))
+        self.members
+            .iter()
+            .find(|&member| member.name.as_deref() == Some(name))
     }
     pub fn size(&self) -> u64 {
         self.size
@@ -420,13 +428,14 @@ impl UnitInfo {
             .chain(self.cache.pointer_address.keys())
             .chain(self.cache.structure_address.keys())
             .chain(self.cache.union_address.keys())
-            .chain(self.cache.variable_address.keys()).copied()
+            .chain(self.cache.variable_address.keys())
+            .copied()
             .collect()
     }
 
     pub fn new<ENDIAN: Endianity>(
-        unit: gimli::Unit<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
-        dwarf: &gimli::Dwarf<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+        unit: gimli::Unit<GimliReader<ENDIAN>>,
+        dwarf: &gimli::Dwarf<GimliReader<ENDIAN>>,
     ) -> Option<Self> {
         let unit_ref = unit.unit_ref(dwarf);
         let mut variables = vec![];
@@ -854,11 +863,13 @@ impl UnitInfo {
             .and_then(|addr| self.cache.base_types.get(addr.0))
         {
             Some(StructOffset(val.size))
-        } else { self
-            .cache
-            .union_address
-            .get(&location)
-            .and_then(|addr| self.cache.unions.get(addr.0)).map(|val| StructOffset(val.size)) }
+        } else {
+            self.cache
+                .union_address
+                .get(&location)
+                .and_then(|addr| self.cache.unions.get(addr.0))
+                .map(|val| StructOffset(val.size))
+        }
     }
 
     pub fn name_from_kind(&self, location: DebugItem) -> Option<&str> {
@@ -916,8 +927,8 @@ impl UnitInfo {
 }
 
 fn parse_string<ENDIAN: Endianity>(
-    attr_value: gimli::AttributeValue<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
-    unit_ref: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    attr_value: gimli::AttributeValue<GimliReader<ENDIAN>>,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<String> {
     let gimli::AttributeValue::DebugStrRef(offset) = attr_value else {
         return None;
@@ -929,8 +940,8 @@ fn parse_string<ENDIAN: Endianity>(
 }
 
 fn parse_type<ENDIAN: Endianity>(
-    attr: gimli::Attribute<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
-    unit_ref: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    attr: gimli::Attribute<GimliReader<ENDIAN>>,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<DebugItem> {
     if let gimli::AttributeValue::UnitRef(offset) = attr.value() {
         DebugItem::from_unit_offset(offset, unit_ref)
@@ -942,8 +953,8 @@ fn parse_type<ENDIAN: Endianity>(
 }
 
 fn parse_offset<ENDIAN: Endianity>(
-    attr: gimli::Attribute<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
-    unit_ref: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    attr: gimli::Attribute<GimliReader<ENDIAN>>,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<StructOffset> {
     match attr.value() {
         gimli::AttributeValue::LocationListsRef(_v) => {
@@ -978,15 +989,15 @@ fn parse_offset<ENDIAN: Endianity>(
 }
 
 fn parse_location<ENDIAN: Endianity>(
-    attr: gimli::Attribute<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
-    unit_ref: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    attr: gimli::Attribute<GimliReader<ENDIAN>>,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<MemoryLocation> {
     parse_offset(attr, unit_ref).map(|v| MemoryLocation(v.0))
 }
 
 fn parse_filename<ENDIAN: Endianity>(
-    attr: gimli::Attribute<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
-    unit_ref: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    attr: gimli::Attribute<GimliReader<ENDIAN>>,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<FileName> {
     let unit = unit_ref.unit;
     let gimli::AttributeValue::FileIndex(file_index) = attr.value() else {
@@ -1031,9 +1042,9 @@ fn parse_filename<ENDIAN: Endianity>(
 }
 
 fn parse_variable<ENDIAN: Endianity>(
-    mut attrs: gimli::AttrsIter<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
     parents: &[String],
-    unit_ref: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<Variable> {
     let mut name = None;
     let mut kind = None;
@@ -1078,8 +1089,8 @@ fn parse_variable<ENDIAN: Endianity>(
 }
 
 fn parse_structure<ENDIAN: Endianity>(
-    mut attrs: gimli::AttrsIter<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
-    unit_ref: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<Structure> {
     let mut name = None;
     let mut size = None;
@@ -1117,8 +1128,8 @@ fn parse_structure<ENDIAN: Endianity>(
 }
 
 fn parse_union<ENDIAN: Endianity>(
-    mut attrs: gimli::AttrsIter<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
-    unit_ref: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<Union> {
     let mut name = None;
     let mut size = None;
@@ -1153,8 +1164,8 @@ fn parse_union<ENDIAN: Endianity>(
     None
 }
 fn parse_structure_member<ENDIAN: Endianity>(
-    mut attrs: gimli::AttrsIter<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
-    unit_ref: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<StructureMember> {
     let mut name = None;
     let mut kind = None;
@@ -1187,7 +1198,7 @@ fn parse_structure_member<ENDIAN: Endianity>(
 }
 
 fn parse_enum_variant<ENDIAN: Endianity>(
-    mut attrs: gimli::AttrsIter<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
 ) -> Option<u64> {
     let mut discriminant = None;
     while let Ok(Some(attr)) = attrs.next() {
@@ -1207,9 +1218,9 @@ fn parse_enum_variant<ENDIAN: Endianity>(
 }
 
 fn update_enum_variant_member<ENDIAN: Endianity>(
-    mut attrs: gimli::AttrsIter<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
     variant: &mut EnumerationVariant,
-    unit_ref: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) {
     while let Ok(Some(attr)) = attrs.next() {
         match attr.name() {
@@ -1242,9 +1253,9 @@ fn update_enum_variant_member<ENDIAN: Endianity>(
 }
 
 fn parse_enum_discriminant<ENDIAN: Endianity>(
-    mut attrs: gimli::AttrsIter<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
     enumeration: &mut Enumeration,
-    unit_ref: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) {
     let mut kind = None;
     let mut offset = None;
@@ -1270,8 +1281,8 @@ fn parse_enum_discriminant<ENDIAN: Endianity>(
 }
 
 fn parse_array<ENDIAN: Endianity>(
-    mut attrs: gimli::AttrsIter<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
-    unit_ref: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<PartialArray> {
     let mut kind = None;
     while let Ok(Some(attr)) = attrs.next() {
@@ -1293,7 +1304,7 @@ fn parse_array<ENDIAN: Endianity>(
 }
 
 fn parse_subrange<ENDIAN: Endianity>(
-    mut attrs: gimli::AttrsIter<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
 ) -> Option<Subrange> {
     let mut lower_bound = None;
     let mut count = None;
@@ -1321,8 +1332,8 @@ fn parse_subrange<ENDIAN: Endianity>(
 }
 
 fn parse_pointer<ENDIAN: Endianity>(
-    mut attrs: gimli::AttrsIter<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
-    unit_ref: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<Pointer> {
     let mut name = None;
     let mut kind = None;
@@ -1343,8 +1354,8 @@ fn parse_pointer<ENDIAN: Endianity>(
 }
 
 fn parse_base_type<ENDIAN: Endianity>(
-    mut attrs: gimli::AttrsIter<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
-    unit_ref: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<BaseType> {
     let mut name = None;
     let mut size = None;

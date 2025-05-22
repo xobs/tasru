@@ -54,6 +54,7 @@ use unit_info::UnitInfo;
 
 pub(crate) type DwarfReaderLe = gimli::read::EndianRcSlice<gimli::LittleEndian>;
 pub(crate) type DwarfReaderBe = gimli::read::EndianRcSlice<gimli::BigEndian>;
+pub(crate) type GimliReader<ENDIAN> = gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>;
 
 /// A collection of parsed Dwarf information for all compilation units within
 /// the specified Elf file. This structure can be queried and will automatically

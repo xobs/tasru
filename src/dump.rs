@@ -1,11 +1,12 @@
 #![allow(unused)]
 
+use crate::GimliReader;
 use gimli::{EndianReader, Endianity, Reader, UnitOffset, UnitSectionOffset};
 use std::rc::Rc;
 
 fn dump_file_index<ENDIAN: Endianity>(
     file_index: u64,
-    unit: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    unit: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if file_index == 0 && unit.header.version() <= 4 {
         return Ok(());
@@ -46,7 +47,7 @@ fn dump_range(range: Option<gimli::Range>) {
 
 fn dump_range_list<ENDIAN: Endianity>(
     offset: gimli::RangeListsOffset<<EndianReader<ENDIAN, Rc<[u8]>> as Reader>::Offset>,
-    unit: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    unit: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut ranges = unit.ranges(offset)?;
     println!(
@@ -112,9 +113,9 @@ fn dump_range_list<ENDIAN: Endianity>(
 }
 
 fn dump_op<ENDIAN: Endianity>(
-    unit: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
-    mut pc: gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>,
-    op: gimli::Operation<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    unit: gimli::UnitRef<GimliReader<ENDIAN>>,
+    mut pc: GimliReader<ENDIAN>,
+    op: gimli::Operation<GimliReader<ENDIAN>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let dwop = gimli::DwOp(pc.read_u8()?);
     print!("{}", dwop);
@@ -292,8 +293,8 @@ fn dump_op<ENDIAN: Endianity>(
 }
 
 fn dump_exprloc<ENDIAN: Endianity>(
-    unit: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
-    data: &gimli::Expression<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    unit: gimli::UnitRef<GimliReader<ENDIAN>>,
+    data: &gimli::Expression<GimliReader<ENDIAN>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut pc = data.0.clone();
     let mut space = false;
@@ -331,7 +332,7 @@ fn dump_exprloc<ENDIAN: Endianity>(
 
 fn dump_loc_list<ENDIAN: Endianity>(
     offset: gimli::LocationListsOffset<<EndianReader<ENDIAN, Rc<[u8]>> as Reader>::Offset>,
-    unit: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    unit: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut locations = unit.locations(offset)?;
     println!(
@@ -433,8 +434,8 @@ fn dump_loc_list<ENDIAN: Endianity>(
 }
 
 pub fn attribute<ENDIAN: Endianity>(
-    attr: &gimli::Attribute<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
-    unit: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    attr: &gimli::Attribute<GimliReader<ENDIAN>>,
+    unit: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let value = attr.value();
     match value {
@@ -676,8 +677,8 @@ fn spaces(buf: &mut String, len: usize) -> &str {
 }
 
 pub fn abbreviation<ENDIAN: Endianity>(
-    unit: &gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
-    entries: &mut gimli::EntriesRaw<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    unit: &gimli::UnitRef<GimliReader<ENDIAN>>,
+    entries: &mut gimli::EntriesRaw<GimliReader<ENDIAN>>,
     abbreviation: &gimli::Abbreviation,
     indent: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -701,7 +702,7 @@ pub fn abbreviation<ENDIAN: Endianity>(
 
 #[allow(unused)]
 pub fn unit_ref<ENDIAN: Endianity>(
-    unit: gimli::UnitRef<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    unit: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut spaces_buf = String::new();
 

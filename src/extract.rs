@@ -1,6 +1,6 @@
-use std::u64;
-
+use crate::GimliReader;
 use gimli::{Endianity, EvaluationResult, Location};
+use std::u64;
 
 #[derive(Debug)]
 pub enum ExtractError {
@@ -182,10 +182,9 @@ impl std::fmt::Display for VariableLocation {
 
 /// Tries to get the result of a DWARF expression in the form of a Piece.
 pub(crate) fn expression_to_piece<ENDIAN: Endianity>(
-    expression: gimli::Expression<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    expression: gimli::Expression<GimliReader<ENDIAN>>,
     encoding: gimli::Encoding,
-) -> Result<Vec<gimli::Piece<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>, usize>>, ExtractError>
-{
+) -> Result<Vec<gimli::Piece<GimliReader<ENDIAN>, usize>>, ExtractError> {
     let mut evaluation = expression.evaluation(encoding);
     let mut result = evaluation.evaluate()?;
 
@@ -224,7 +223,7 @@ pub(crate) fn expression_to_piece<ENDIAN: Endianity>(
 /// - `Result<ExpressionResult::Value(),_>`: The value is statically stored in the binary, and can be returned, and has no relevant memory location.
 /// - `Result<ExpressionResult::Location(),_>`: One of the variants of VariableLocation, and needs to be interpreted for handling the 'expected' errors we encounter during evaluation.
 pub(crate) fn evaluate_expression<ENDIAN: Endianity>(
-    expression: gimli::Expression<gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+    expression: gimli::Expression<GimliReader<ENDIAN>>,
     encoding: gimli::Encoding,
 ) -> Result<ExpressionResult, ExtractError> {
     fn evaluate_address(address: u64) -> ExpressionResult {
