@@ -52,8 +52,8 @@ use std::rc::Rc;
 use debug_types::{DebugTypeError, DebugVariable};
 use unit_info::UnitInfo;
 
-pub(crate) type GimliReader = gimli::EndianReader<gimli::LittleEndian, std::rc::Rc<[u8]>>;
-pub(crate) type DwarfReader = gimli::read::EndianRcSlice<gimli::LittleEndian>;
+pub(crate) type DwarfReaderLe = gimli::read::EndianRcSlice<gimli::LittleEndian>;
+pub(crate) type DwarfReaderBe = gimli::read::EndianRcSlice<gimli::BigEndian>;
 
 /// A collection of parsed Dwarf information for all compilation units within
 /// the specified Elf file. This structure can be queried and will automatically
@@ -114,12 +114,20 @@ impl DebugInfo {
     /// This will parse the file and extract each unit section, then perform a comprehensive parse
     /// of all symbols present within the file.
     pub fn new<P: AsRef<Path>>(file: &P) -> Result<DebugInfo, DebugInfoError> {
-        let mut symbol_unit_mapping = HashMap::new();
         let file = std::fs::read(file)?;
         let object = object::File::parse(file.as_slice())?;
 
+        if object.is_little_endian() {
+            Self::load_le(object)
+        } else {
+            Self::load_be(object)
+        }
+    }
+
+    fn load_le(object: object::File<'_>) -> Result<DebugInfo, DebugInfoError> {
+        let mut symbol_unit_mapping = HashMap::new();
         // Load a section and return as `Cow<[u8]>`.
-        let load_section = |id: gimli::SectionId| -> Result<DwarfReader, gimli::Error> {
+        let load_section = |id: gimli::SectionId| -> Result<DwarfReaderLe, gimli::Error> {
             let data = object
                 .section_by_name(id.name())
                 .and_then(|section| section.uncompressed_data().ok())
@@ -137,7 +145,10 @@ impl DebugInfo {
         let mut units = Vec::new();
         let mut iter = dwarf_cow.units();
 
+        let mut section_count = 0;
         while let Ok(Some(header)) = iter.next() {
+            println!("Parsing unit {:?}", header);
+            section_count += 1;
             if let Ok(unit) = dwarf_cow.unit(header) {
                 // The DWARF V5 standard, section 2.4 specifies that the address size
                 // for the object file (or the target architecture default) will be used for
@@ -153,8 +164,63 @@ impl DebugInfo {
                     }
                     units.push(unit);
                 }
-            };
+            } else {
+                println!("Skipping unit");
+            }
         }
+        println!("Processed {} sections", section_count);
+
+        Ok(DebugInfo {
+            units,
+            symbol_unit_mapping,
+        })
+    }
+
+    fn load_be(object: object::File<'_>) -> Result<DebugInfo, DebugInfoError> {
+        let mut symbol_unit_mapping = HashMap::new();
+        // Load a section and return as `Cow<[u8]>`.
+        let load_section = |id: gimli::SectionId| -> Result<DwarfReaderBe, gimli::Error> {
+            let data = object
+                .section_by_name(id.name())
+                .and_then(|section| section.uncompressed_data().ok())
+                .unwrap_or_else(|| borrow::Cow::Borrowed(&[][..]));
+
+            Ok(gimli::read::EndianRcSlice::new(
+                Rc::from(&*data),
+                gimli::BigEndian,
+            ))
+        };
+
+        // Load all of the sections.
+        let dwarf_cow = gimli::Dwarf::load(&load_section)?;
+
+        let mut units = Vec::new();
+        let mut iter = dwarf_cow.units();
+
+        let mut section_count = 0;
+        while let Ok(Some(header)) = iter.next() {
+            println!("Parsing unit {:?}", header);
+            section_count += 1;
+            if let Ok(unit) = dwarf_cow.unit(header) {
+                // The DWARF V5 standard, section 2.4 specifies that the address size
+                // for the object file (or the target architecture default) will be used for
+                // DWARF debugging information.
+                // The following line is a workaround for instances where the address size of the
+                // CIE (Common Information Entry) is not correctly set.
+                // The frame section address size is only used for CIE versions before 4.
+                // frame_section.set_address_size(unit.encoding().address_size);
+
+                if let Some(unit) = UnitInfo::new(unit, &dwarf_cow) {
+                    for symbol in unit.all_symbols() {
+                        assert!(symbol_unit_mapping.insert(symbol, units.len()).is_none());
+                    }
+                    units.push(unit);
+                }
+            } else {
+                println!("Skipping unit");
+            }
+        }
+        println!("Processed {} sections", section_count);
 
         Ok(DebugInfo {
             units,
