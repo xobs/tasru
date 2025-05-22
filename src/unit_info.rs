@@ -8,9 +8,9 @@ pub struct DebugItem {
 }
 
 impl DebugItem {
-    pub fn from_unit_offset<'a, ENDIAN: Endianity>(
+    pub fn from_unit_offset<ENDIAN: Endianity>(
         offset: gimli::UnitOffset,
-        unit_ref: gimli::UnitRef<'a, gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
+        unit_ref: gimli::UnitRef<'_, gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>>,
     ) -> Option<Self> {
         offset
             .to_debug_info_offset(&unit_ref.unit.header)
@@ -191,12 +191,7 @@ impl Union {
     }
 
     pub fn member_named(&self, name: &str) -> Option<&StructureMember> {
-        for member in &self.members {
-            if member.name.as_deref() == Some(name) {
-                return Some(member);
-            }
-        }
-        None
+        self.members.iter().find(|&member| member.name.as_deref() == Some(name))
     }
 }
 
@@ -248,22 +243,12 @@ impl Enumeration {
         // return the variant without a discriminant. This is the case for
         // niche-optimized enums.
         self.variants.get(discriminant).or_else(|| {
-            for variant in &self.variants {
-                if variant.discriminant.is_none() {
-                    return Some(variant);
-                }
-            }
-            None
+            self.variants.iter().find(|&variant| variant.discriminant.is_none())
         })
     }
 
     pub fn variant_named(&self, name: &str) -> Option<&EnumerationVariant> {
-        for variant in &self.variants {
-            if variant.name == name {
-                return Some(variant);
-            }
-        }
-        None
+        self.variants.iter().find(|&variant| variant.name == name)
     }
 
     pub fn variants(&self) -> &[EnumerationVariant] {
@@ -298,12 +283,7 @@ impl Structure {
     }
 
     pub fn member_named(&self, name: &str) -> Option<&StructureMember> {
-        for member in &self.members {
-            if member.name.as_deref() == Some(name) {
-                return Some(member);
-            }
-        }
-        None
+        self.members.iter().find(|&member| member.name.as_deref() == Some(name))
     }
     pub fn size(&self) -> u64 {
         self.size
@@ -440,8 +420,7 @@ impl UnitInfo {
             .chain(self.cache.pointer_address.keys())
             .chain(self.cache.structure_address.keys())
             .chain(self.cache.union_address.keys())
-            .chain(self.cache.variable_address.keys())
-            .map(|x| *x)
+            .chain(self.cache.variable_address.keys()).copied()
             .collect()
     }
 
@@ -478,13 +457,13 @@ impl UnitInfo {
         let mut depth = 0usize;
         while let Ok(Some((depth_delta, abbrev))) = entries.next_dfs() {
             if depth_delta < 0 {
-                if depth_delta.abs() as usize > depth {
+                if depth_delta.unsigned_abs() > depth {
                     panic!(
                         "Depth went negative! Delta: {}  depth: {}",
                         depth_delta, depth
                     );
                 }
-                depth = depth.saturating_sub(depth_delta.abs() as usize);
+                depth = depth.saturating_sub(depth_delta.unsigned_abs());
             } else {
                 depth = depth.saturating_add(depth_delta as usize);
             };
@@ -538,7 +517,7 @@ impl UnitInfo {
                         }
 
                         // Add the ordinary variable name if it's different from the linkage name.
-                        if &Some(&variable.name) != &variable.linkage_name.as_ref() {
+                        if Some(&variable.name) != variable.linkage_name.as_ref() {
                             assert!(
                                 variable_names
                                     .insert(variable.name.clone(), EntryIndex(variables.len()))
@@ -875,20 +854,11 @@ impl UnitInfo {
             .and_then(|addr| self.cache.base_types.get(addr.0))
         {
             Some(StructOffset(val.size))
-        } else if let Some(val) = self
+        } else { self
             .cache
             .union_address
             .get(&location)
-            .and_then(|addr| self.cache.unions.get(addr.0))
-        {
-            Some(StructOffset(val.size))
-        } else {
-            // println!(
-            //     "Unknown kind @ {:08x} -- can't determine size",
-            //     location.offset
-            // );
-            None
-        }
+            .and_then(|addr| self.cache.unions.get(addr.0)).map(|val| StructOffset(val.size)) }
     }
 
     pub fn name_from_kind(&self, location: DebugItem) -> Option<&str> {

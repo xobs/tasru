@@ -133,7 +133,7 @@ pub struct DebugArrayItem<'a> {
     parent_name: String,
 }
 
-impl<'a> core::fmt::Debug for DebugArrayItem<'a> {
+impl core::fmt::Debug for DebugArrayItem<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DebugArrayItem")
             .field("location", &self.location)
@@ -240,31 +240,23 @@ pub struct DebugArray<'a> {
 
 impl<'a> DebugArray<'a> {
     pub fn structure(&self) -> Option<DebugStructure<'a>> {
-        if let Some(structure) = self.info.structure_from_item(self.array.kind()) {
-            Some(DebugStructure {
+        self.info.structure_from_item(self.array.kind()).map(|structure| DebugStructure {
                 unit: self.unit,
                 info: self.info,
                 location: self.location,
                 offset: self.offset,
                 structure,
             })
-        } else {
-            None
-        }
     }
 
     pub fn enumeration(&self) -> Option<DebugEnumeration<'a>> {
-        if let Some(enumeration) = self.info.enumeration_from_item(self.array.kind()) {
-            Some(DebugEnumeration {
+        self.info.enumeration_from_item(self.array.kind()).map(|enumeration| DebugEnumeration {
                 unit: self.unit,
                 info: self.info,
                 location: self.location,
                 offset: self.offset,
                 enumeration,
             })
-        } else {
-            None
-        }
     }
 
     pub fn iter(&self) -> Result<DebugArrayIterator<'a>, DebugTypeError> {
@@ -294,7 +286,7 @@ impl<'a> DebugArray<'a> {
     }
 }
 
-impl<'a> core::ops::Deref for DebugArray<'a> {
+impl core::ops::Deref for DebugArray<'_> {
     type Target = unit_info::Array;
 
     fn deref(&self) -> &Self::Target {
@@ -302,7 +294,7 @@ impl<'a> core::ops::Deref for DebugArray<'a> {
     }
 }
 
-impl<'a> core::fmt::Debug for DebugArray<'a> {
+impl core::fmt::Debug for DebugArray<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DebugArray")
             .field("location", &self.location)
@@ -318,7 +310,7 @@ pub struct DebugBaseType<'a> {
     base_type: &'a unit_info::BaseType,
 }
 
-impl<'a> DebugBaseType<'a> {
+impl DebugBaseType<'_> {
     pub fn name(&self) -> &str {
         self.base_type.name()
     }
@@ -339,7 +331,7 @@ impl<'a> DebugBaseType<'a> {
         let address = self.location?.0;
         Some(match self.size() {
             1 => memory_source.read_u8(address).ok()?.into(),
-            2 => memory_source.read_u16(address).ok()?.into(),
+            2 => memory_source.read_u16(address).ok()?,
             _ => return None,
         })
     }
@@ -349,7 +341,7 @@ impl<'a> DebugBaseType<'a> {
         Some(match self.size() {
             1 => memory_source.read_u8(address).ok()?.into(),
             2 => memory_source.read_u16(address).ok()?.into(),
-            4 => memory_source.read_u32(address).ok()?.into(),
+            4 => memory_source.read_u32(address).ok()?,
             _ => return None,
         })
     }
@@ -366,7 +358,7 @@ impl<'a> DebugBaseType<'a> {
     }
 }
 
-impl<'a> core::fmt::Debug for DebugBaseType<'a> {
+impl core::fmt::Debug for DebugBaseType<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DebugBaseType")
             .field("location", &self.location)
@@ -530,7 +522,7 @@ impl<'a> DebugStructureMember<'a> {
     }
 }
 
-impl<'a> core::ops::Deref for DebugStructureMember<'a> {
+impl core::ops::Deref for DebugStructureMember<'_> {
     type Target = unit_info::StructureMember;
 
     fn deref(&self) -> &Self::Target {
@@ -538,7 +530,7 @@ impl<'a> core::ops::Deref for DebugStructureMember<'a> {
     }
 }
 
-impl<'a> core::fmt::Debug for DebugStructureMember<'a> {
+impl core::fmt::Debug for DebugStructureMember<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DebugStructureMember")
             .field("structure_member", &self.structure_member)
@@ -576,7 +568,7 @@ impl<'a> DebugUnion<'a> {
     }
 }
 
-impl<'a> core::fmt::Debug for DebugUnion<'a> {
+impl core::fmt::Debug for DebugUnion<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DebugUnion")
             .field("union", &self.union)
@@ -592,7 +584,7 @@ pub struct DebugSliceBaseTypeIter<'a> {
     base_type: &'a unit_info::BaseType,
 }
 
-impl<'a> DebugSliceBaseTypeIter<'a> {
+impl DebugSliceBaseTypeIter<'_> {
     pub fn len(&self) -> usize {
         self.length as usize
     }
@@ -627,7 +619,7 @@ pub struct DebugSliceStructureIter<'a> {
     structure: &'a unit_info::Structure,
 }
 
-impl<'a> DebugSliceStructureIter<'a> {
+impl DebugSliceStructureIter<'_> {
     pub fn len(&self) -> usize {
         self.length as usize
     }
@@ -776,7 +768,7 @@ impl<'a> DebugStructure<'a> {
     }
 }
 
-impl<'a> core::fmt::Debug for DebugStructure<'a> {
+impl core::fmt::Debug for DebugStructure<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DebugStructure")
             .field("structure", &self.structure)
@@ -784,7 +776,7 @@ impl<'a> core::fmt::Debug for DebugStructure<'a> {
     }
 }
 
-impl<'a> core::ops::Deref for DebugStructure<'a> {
+impl core::ops::Deref for DebugStructure<'_> {
     type Target = unit_info::Structure;
 
     fn deref(&self) -> &Self::Target {
@@ -848,7 +840,7 @@ impl<'a> DebugPointer<'a> {
     pub fn follow<S: Read>(mut self, memory_source: &mut S) -> Result<Self, DebugTypeError> {
         let location = self.location.ok_or(DebugTypeError::LocationMissing)?.0;
         let target = memory_source
-            .read_u32(location.into())
+            .read_u32(location)
             .map_err(|_| DebugTypeError::ReadError)?;
         self.location = Some(MemoryLocation(target.into()));
         self.offset = StructOffset::new(0);
@@ -858,11 +850,11 @@ impl<'a> DebugPointer<'a> {
     /// Read a u8 from the specified offset
     pub fn read_u8<S: Read>(&self, offset: u64, memory_source: &mut S) -> Option<u8> {
         let location = self.location?.0 + offset;
-        memory_source.read_u8(location.into()).ok()
+        memory_source.read_u8(location).ok()
     }
 }
 
-impl<'a> core::fmt::Debug for DebugPointer<'a> {
+impl core::fmt::Debug for DebugPointer<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DebugPointer")
             .field("pointer", &self.pointer)
@@ -870,7 +862,7 @@ impl<'a> core::fmt::Debug for DebugPointer<'a> {
     }
 }
 
-impl<'a> core::ops::Deref for DebugPointer<'a> {
+impl core::ops::Deref for DebugPointer<'_> {
     type Target = unit_info::Pointer;
 
     fn deref(&self) -> &Self::Target {
@@ -905,7 +897,7 @@ impl<'a> DebugEnumerationVariant<'a> {
     }
 }
 
-impl<'a> core::fmt::Debug for DebugEnumerationVariant<'a> {
+impl core::fmt::Debug for DebugEnumerationVariant<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DebugEnumerationVariant")
             .field("variant", &self.variant)
@@ -913,7 +905,7 @@ impl<'a> core::fmt::Debug for DebugEnumerationVariant<'a> {
     }
 }
 
-impl<'a> core::ops::Deref for DebugEnumerationVariant<'a> {
+impl core::ops::Deref for DebugEnumerationVariant<'_> {
     type Target = unit_info::EnumerationVariant;
 
     fn deref(&self) -> &Self::Target {
@@ -1037,7 +1029,7 @@ impl<'a> DebugEnumeration<'a> {
     }
 }
 
-impl<'a> core::fmt::Debug for DebugEnumeration<'a> {
+impl core::fmt::Debug for DebugEnumeration<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DebugEnumeration")
             .field("enumeration", &self.enumeration)
@@ -1045,7 +1037,7 @@ impl<'a> core::fmt::Debug for DebugEnumeration<'a> {
     }
 }
 
-impl<'a> core::ops::Deref for DebugEnumeration<'a> {
+impl core::ops::Deref for DebugEnumeration<'_> {
     type Target = unit_info::Enumeration;
 
     fn deref(&self) -> &Self::Target {
@@ -1118,7 +1110,7 @@ impl<'a> DebugVariable<'a> {
     }
 }
 
-impl<'a> core::ops::Deref for DebugVariable<'a> {
+impl core::ops::Deref for DebugVariable<'_> {
     type Target = unit_info::Variable;
 
     fn deref(&self) -> &Self::Target {
@@ -1126,7 +1118,7 @@ impl<'a> core::ops::Deref for DebugVariable<'a> {
     }
 }
 
-impl<'a> core::fmt::Debug for DebugVariable<'a> {
+impl core::fmt::Debug for DebugVariable<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DebugVariable")
             // .field("unit", &self.unit)

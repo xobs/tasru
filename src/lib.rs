@@ -247,8 +247,7 @@ impl DebugInfo {
     pub fn size_from_item(&self, item: unit_info::DebugItem) -> Option<unit_info::StructOffset> {
         self.symbol_unit_mapping
             .get(&item)
-            .map(|var| self.units[*var].size_from_item(item))
-            .flatten()
+            .and_then(|var| self.units[*var].size_from_item(item))
     }
 
     /// Given an item, return the Variable object. If the item is not a Variable, or couldn't
@@ -256,8 +255,7 @@ impl DebugInfo {
     pub fn variable_from_item(&self, item: unit_info::DebugItem) -> Option<&unit_info::Variable> {
         self.symbol_unit_mapping
             .get(&item)
-            .map(|var| self.units[*var].variable_from_item(item))
-            .flatten()
+            .and_then(|var| self.units[*var].variable_from_item(item))
     }
 
     /// Given an item, return the Structure object. If the item is not a Structure, or couldn't
@@ -265,8 +263,7 @@ impl DebugInfo {
     pub fn structure_from_item(&self, item: unit_info::DebugItem) -> Option<&unit_info::Structure> {
         self.symbol_unit_mapping
             .get(&item)
-            .map(|var| self.units[*var].structure_from_item(item))
-            .flatten()
+            .and_then(|var| self.units[*var].structure_from_item(item))
     }
 
     /// Given an item, return the Enumeration object. If the item is not an Enumeration, or couldn't
@@ -277,8 +274,7 @@ impl DebugInfo {
     ) -> Option<&unit_info::Enumeration> {
         self.symbol_unit_mapping
             .get(&item)
-            .map(|var| self.units[*var].enumeration_from_item(item))
-            .flatten()
+            .and_then(|var| self.units[*var].enumeration_from_item(item))
     }
 
     /// Given an item, return the Pointer object. If the item is not a Pointer, or couldn't
@@ -286,8 +282,7 @@ impl DebugInfo {
     pub fn pointer_from_item(&self, item: unit_info::DebugItem) -> Option<&unit_info::Pointer> {
         self.symbol_unit_mapping
             .get(&item)
-            .map(|var| self.units[*var].pointer_from_item(item))
-            .flatten()
+            .and_then(|var| self.units[*var].pointer_from_item(item))
     }
 
     /// Given an item, return the Array object. If the item is not an Array, or couldn't
@@ -295,8 +290,7 @@ impl DebugInfo {
     pub fn array_from_item(&self, item: unit_info::DebugItem) -> Option<&unit_info::Array> {
         self.symbol_unit_mapping
             .get(&item)
-            .map(|var| self.units[*var].array_from_item(item))
-            .flatten()
+            .and_then(|var| self.units[*var].array_from_item(item))
     }
 
     /// Given an item, return the Union object. If the item is not a Union, or couldn't
@@ -304,8 +298,7 @@ impl DebugInfo {
     pub fn union_from_item(&self, item: unit_info::DebugItem) -> Option<&unit_info::Union> {
         self.symbol_unit_mapping
             .get(&item)
-            .map(|var| self.units[*var].union_from_item(item))
-            .flatten()
+            .and_then(|var| self.units[*var].union_from_item(item))
     }
 
     /// Given an item, return the BaseType object. If the item is not a BaseType, or couldn't
@@ -313,7 +306,6 @@ impl DebugInfo {
     pub fn base_type_from_item(&self, item: unit_info::DebugItem) -> Option<&unit_info::BaseType> {
         self.symbol_unit_mapping
             .get(&item)
-            .map(|var| self.units[*var].base_type_from_item(item))
-            .flatten()
+            .and_then(|var| self.units[*var].base_type_from_item(item))
     }
 }

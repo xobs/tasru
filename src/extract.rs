@@ -261,7 +261,7 @@ pub(crate) fn evaluate_expression<ENDIAN: Endianity>(
             ExpressionResult::Location(VariableLocation::Error(error))
         }
         Location::Address { address } => evaluate_address(*address),
-        Location::Value { value } => value.to_u64(u64::MAX).map(|v| ExpressionResult::Value(v))?,
+        Location::Value { value } => value.to_u64(u64::MAX).map(ExpressionResult::Value)?,
         // Location::Register { register } => {
         //     if let Some(address) = frame_info
         //         .registers
