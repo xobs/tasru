@@ -1,6 +1,5 @@
 use crate::GimliReader;
 use gimli::{Endianity, EvaluationResult, Location};
-use std::u64;
 
 #[derive(Debug)]
 pub enum ExtractError {

@@ -240,7 +240,9 @@ pub struct DebugArray<'a> {
 
 impl<'a> DebugArray<'a> {
     pub fn structure(&self) -> Option<DebugStructure<'a>> {
-        self.info.structure_from_item(self.array.kind()).map(|structure| DebugStructure {
+        self.info
+            .structure_from_item(self.array.kind())
+            .map(|structure| DebugStructure {
                 unit: self.unit,
                 info: self.info,
                 location: self.location,
@@ -250,7 +252,9 @@ impl<'a> DebugArray<'a> {
     }
 
     pub fn enumeration(&self) -> Option<DebugEnumeration<'a>> {
-        self.info.enumeration_from_item(self.array.kind()).map(|enumeration| DebugEnumeration {
+        self.info
+            .enumeration_from_item(self.array.kind())
+            .map(|enumeration| DebugEnumeration {
                 unit: self.unit,
                 info: self.info,
                 location: self.location,
@@ -588,6 +592,9 @@ impl DebugSliceBaseTypeIter<'_> {
     pub fn len(&self) -> usize {
         self.length as usize
     }
+    pub fn is_empty(&self) -> bool {
+        self.length == 0
+    }
 }
 
 impl<'a> Iterator for DebugSliceBaseTypeIter<'a> {
@@ -622,6 +629,9 @@ pub struct DebugSliceStructureIter<'a> {
 impl DebugSliceStructureIter<'_> {
     pub fn len(&self) -> usize {
         self.length as usize
+    }
+    pub fn is_empty(&self) -> bool {
+        self.length == 0
     }
 }
 
