@@ -1,6 +1,6 @@
 [package]
 name = "tasru"
-version = "0.3.2"
+version = "0.3.3"
 edition = "2021"
 description = "A method to map and understand dwarf symbol information"
 license = "Apache-2.0"
