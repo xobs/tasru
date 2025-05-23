@@ -736,15 +736,6 @@ impl UnitInfo {
             }
         }
 
-        println!("Variable names:");
-        for name in variable_names.keys() {
-            println!("Variable name: {}", name);
-        }
-        println!("Demangled names:");
-        for name in demangled_variable_names.keys() {
-            println!("Demangled name: {}", name);
-        }
-
         let cache = SymbolCache {
             variables,
             structures,
