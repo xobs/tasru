@@ -60,6 +60,12 @@ impl core::ops::AddAssign<StructOffset> for MemoryLocation {
     }
 }
 
+impl From<MemoryLocation> for u64 {
+    fn from(val: MemoryLocation) -> Self {
+        val.0
+    }
+}
+
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 /// An offset from the start of the struct
 pub struct StructOffset(pub(crate) u64);
