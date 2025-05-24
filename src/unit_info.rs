@@ -520,12 +520,17 @@ impl UnitInfo {
                     // name may be demangled or not, and may be different from the variable name.
                     // Generally, the linkage name is the one used.
                     if let Some(linkage_name) = &variable.linkage_name {
+                        log::trace!("Adding variable {} to unit", linkage_name);
                         assert!(variable_names
                             .insert(linkage_name.clone(), EntryIndex(variables.len()))
                             .is_none());
                         let demangled_linkage_name =
                             format!("{:#}", rustc_demangle::demangle(linkage_name));
                         if demangled_linkage_name != demangled_name {
+                            log::trace!(
+                                "Adding demangled variable {} to unit",
+                                demangled_linkage_name
+                            );
                             assert!(demangled_variable_names
                                 .insert(demangled_linkage_name, EntryIndex(variables.len()))
                                 .is_none());
@@ -562,7 +567,7 @@ impl UnitInfo {
                     if parent_tag == gimli::constants::DW_TAG_structure_type =>
                 {
                     let Some(structure) = structures.pop() else {
-                        println!("Structure was NONE!");
+                        log::error!("Structure was NONE!");
                         continue;
                     };
                     // Remove the struct form the address and add it to the enumeration list
@@ -729,11 +734,11 @@ impl UnitInfo {
 
                 gimli::constants::DW_TAG_namespace => {
                     let Ok(Some(name)) = abbrev.attr_value(DW_AT_name) else {
-                        println!("name not found for namespace!");
+                        log::error!("name not found for namespace!");
                         continue;
                     };
                     let Some(name) = parse_string(name, unit_ref) else {
-                        println!("couldn't parse name");
+                        log::error!("couldn't parse name");
                         continue;
                     };
                     parent_namespace.push(name);
@@ -914,10 +919,10 @@ impl UnitInfo {
         {
             Some(val.name())
         } else {
-            // println!(
-            //     "Unknown kind @ {:08x} -- can't determine name",
-            //     location.offset
-            // );
+            log::info!(
+                "Unknown kind @ {:08x} -- can't determine name",
+                location.offset
+            );
             None
         }
     }
@@ -974,7 +979,7 @@ fn parse_offset<ENDIAN: Endianity>(
                 // panic!("Result was {:?}", result);
                 return None;
             };
-            // println!("Variable located at {:08x?}", address);
+            log::trace!("Variable located at {:08x?}", address);
             Some(StructOffset(address))
         }
         _ => {
@@ -1010,7 +1015,7 @@ fn parse_filename<ENDIAN: Endianity>(
     let file = match header.file(file_index) {
         Some(file) => file,
         None => {
-            println!("Unable to get header for file {}", file_index);
+            log::error!("Unable to get header for file {}", file_index);
             return None;
         }
     };
@@ -1104,7 +1109,7 @@ fn parse_structure<ENDIAN: Endianity>(
             gimli::constants::DW_AT_declaration => {}
             gimli::constants::DW_AT_calling_convention => {}
             _ => {
-                println!(
+                log::error!(
                     "Unrecognized struct field: {}",
                     attr.name().static_string().unwrap_or("<unknown>")
                 );
@@ -1142,7 +1147,7 @@ fn parse_union<ENDIAN: Endianity>(
             gimli::constants::DW_AT_calling_convention => {}
             // gimli::constants::DW_AT_containing_type => containing_type = parse_type(attr, unit_ref),
             _ => {
-                println!(
+                log::error!(
                     "Unrecognized union field: {}",
                     attr.name().static_string().unwrap_or("<unknown>")
                 );
@@ -1180,7 +1185,7 @@ fn parse_structure_member<ENDIAN: Endianity>(
             gimli::constants::DW_AT_data_bit_offset => {}
             gimli::constants::DW_AT_bit_size => {}
             _ => {
-                println!(
+                log::error!(
                     "Unrecognized struct member attr: {}",
                     attr.name().static_string().unwrap_or("<unknown>")
                 );
@@ -1264,7 +1269,7 @@ fn parse_enum_discriminant<ENDIAN: Endianity>(
             gimli::constants::DW_AT_alignment => {}
             gimli::constants::DW_AT_name => {}
             _ => {
-                println!(
+                log::error!(
                     "Unrecognized discriminant attr: {}",
                     attr.name().static_string().unwrap_or("<unknown>")
                 );
@@ -1287,7 +1292,7 @@ fn parse_array<ENDIAN: Endianity>(
             gimli::constants::DW_AT_type => kind = parse_type(attr, unit_ref),
             gimli::constants::DW_AT_GNU_vector => {}
             _ => {
-                println!(
+                log::error!(
                     "Unrecognized array attr: {}",
                     attr.name().static_string().unwrap_or("<unknown>")
                 );
@@ -1313,7 +1318,7 @@ fn parse_subrange<ENDIAN: Endianity>(
                 count = attr.udata_value().map(|udata| udata as usize);
             }
             _ => {
-                println!(
+                log::error!(
                     "Unrecognized subrange attr: {}",
                     attr.name().static_string().unwrap_or("<unknown>")
                 );

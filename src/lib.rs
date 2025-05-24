@@ -184,6 +184,17 @@ impl DebugInfo {
         Err(DebugTypeError::VariableNotFound(path.into()))
     }
 
+    /// Consult all units to look for a variant with the specified name. If the variable
+    /// cannot be found, return an error. The variable name will not be demangled.
+    pub fn variable_from_name(&self, path: &str) -> Result<DebugVariable, DebugTypeError> {
+        for unit in &self.units {
+            if let Some(variable) = unit.variable_from_name(path) {
+                return Ok(DebugVariable::new(unit, self, variable));
+            }
+        }
+        Err(DebugTypeError::VariableNotFound(path.into()))
+    }
+
     /// Get the size of the specified debug item. Any debug item may be specified here,
     /// though some types may return `None` if their size couldn't be determined.
     pub fn size_from_item(&self, item: unit_info::DebugItem) -> Option<unit_info::StructOffset> {
