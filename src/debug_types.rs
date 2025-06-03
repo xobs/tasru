@@ -180,7 +180,7 @@ impl<'a> DebugArrayItem<'a> {
 
     /// Treat the Array as a `u8`. This can be useful for reading strings, which are
     /// generally stored as arrays of u8 values.
-    pub fn u8<S: Read>(&self, memory_source: &mut S) -> Option<u8> {
+    pub fn u8<S: Read + ?Sized>(&self, memory_source: &mut S) -> Option<u8> {
         if let Some(location) = self.location {
             if let Some(base_type) = self.info.base_type_from_item(self.kind) {
                 if base_type.size() == 1 {
@@ -323,7 +323,7 @@ impl DebugBaseType<'_> {
         self.base_type.size()
     }
 
-    pub fn as_u8<S: Read>(&self, memory_source: &mut S) -> Option<u8> {
+    pub fn as_u8<S: Read + ?Sized>(&self, memory_source: &mut S) -> Option<u8> {
         let address = self.location?.0;
         Some(match self.size() {
             1 => memory_source.read_u8(address).ok()?,
@@ -331,7 +331,7 @@ impl DebugBaseType<'_> {
         })
     }
 
-    pub fn as_u16<S: Read>(&self, memory_source: &mut S) -> Option<u16> {
+    pub fn as_u16<S: Read + ?Sized>(&self, memory_source: &mut S) -> Option<u16> {
         let address = self.location?.0;
         Some(match self.size() {
             1 => memory_source.read_u8(address).ok()?.into(),
@@ -340,7 +340,7 @@ impl DebugBaseType<'_> {
         })
     }
 
-    pub fn as_u32<S: Read>(&self, memory_source: &mut S) -> Option<u32> {
+    pub fn as_u32<S: Read + ?Sized>(&self, memory_source: &mut S) -> Option<u32> {
         let address = self.location?.0;
         Some(match self.size() {
             1 => memory_source.read_u8(address).ok()?.into(),
@@ -350,7 +350,7 @@ impl DebugBaseType<'_> {
         })
     }
 
-    pub fn as_u64<S: Read>(&self, memory_source: &mut S) -> Option<u64> {
+    pub fn as_u64<S: Read + ?Sized>(&self, memory_source: &mut S) -> Option<u64> {
         let address = self.location?.0;
         Some(match self.size() {
             1 => memory_source.read_u8(address).ok()?.into(),
@@ -746,7 +746,7 @@ impl<'a> DebugStructure<'a> {
 
     /// Special case for Rust slices, which always have two members:
     /// a "data_ptr" and a "length".
-    pub fn as_slice<S: Read>(
+    pub fn as_slice<S: Read + ?Sized>(
         &self,
         memory_source: &mut S,
     ) -> Result<DebugSlice<'a>, DebugTypeError> {
@@ -820,7 +820,7 @@ impl<'a> DebugPointer<'a> {
             })
     }
 
-    pub fn follow_unless_null<S: Read>(
+    pub fn follow_unless_null<S: Read + ?Sized>(
         self,
         memory_source: &mut S,
     ) -> Result<Self, DebugTypeError> {
@@ -834,7 +834,7 @@ impl<'a> DebugPointer<'a> {
     }
 
     /// Attempt to follow a pointer. If the pointer is null, return `Ok(None)`.
-    pub fn try_follow<S: Read>(
+    pub fn try_follow<S: Read + ?Sized>(
         self,
         memory_source: &mut S,
     ) -> Result<Option<Self>, DebugTypeError> {
@@ -847,7 +847,10 @@ impl<'a> DebugPointer<'a> {
         }
     }
 
-    pub fn follow<S: Read>(mut self, memory_source: &mut S) -> Result<Self, DebugTypeError> {
+    pub fn follow<S: Read + ?Sized>(
+        mut self,
+        memory_source: &mut S,
+    ) -> Result<Self, DebugTypeError> {
         let location = self.location.ok_or(DebugTypeError::LocationMissing)?.0;
         let target = memory_source
             .read_u32(location)
@@ -858,7 +861,7 @@ impl<'a> DebugPointer<'a> {
     }
 
     /// Read a u8 from the specified offset
-    pub fn read_u8<S: Read>(&self, offset: u64, memory_source: &mut S) -> Option<u8> {
+    pub fn read_u8<S: Read + ?Sized>(&self, offset: u64, memory_source: &mut S) -> Option<u8> {
         let location = self.location?.0 + offset;
         memory_source.read_u8(location).ok()
     }
@@ -1005,7 +1008,7 @@ impl<'a> DebugEnumeration<'a> {
     }
 
     /// Returns the currently-selected variant, if one is available.
-    pub fn variant<S: Read>(
+    pub fn variant<S: Read + ?Sized>(
         &self,
         memory_source: &mut S,
     ) -> Result<DebugEnumerationVariant<'a>, DebugTypeError> {
