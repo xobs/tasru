@@ -133,6 +133,7 @@ impl StructureMember {
 
 pub struct Pointer {
     name: Option<String>,
+    namespace: String,
     kind: DebugItem,
 }
 
@@ -140,6 +141,11 @@ impl Pointer {
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()
     }
+
+    pub fn namespace(&self) -> &str {
+        &self.namespace
+    }
+
     pub fn kind(&self) -> DebugItem {
         self.kind
     }
@@ -156,12 +162,17 @@ impl core::fmt::Debug for Pointer {
 
 pub struct BaseType {
     name: String,
+    namespace: String,
     size: u64,
 }
 
 impl BaseType {
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn namespace(&self) -> &str {
+        &self.namespace
     }
 
     pub fn size(&self) -> u64 {
@@ -181,6 +192,7 @@ impl core::fmt::Debug for BaseType {
 #[derive(Debug)]
 pub struct Union {
     name: String,
+    namespace: String,
     members: Vec<StructureMember>,
     size: u64,
 }
@@ -188,6 +200,10 @@ pub struct Union {
 impl Union {
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn namespace(&self) -> &str {
+        &self.namespace
     }
 
     pub fn size(&self) -> u64 {
@@ -217,12 +233,15 @@ impl EnumerationVariant {
     pub fn name(&self) -> &str {
         &self.name
     }
+
     pub fn kind(&self) -> DebugItem {
         self.kind
     }
+
     pub fn offset(&self) -> StructOffset {
         self.offset
     }
+
     pub fn discriminant(&self) -> Option<u64> {
         self.discriminant
     }
@@ -231,6 +250,7 @@ impl EnumerationVariant {
 #[derive(Debug)]
 pub struct Enumeration {
     name: String,
+    namespace: String,
     discriminant_offset: StructOffset,
     discriminant_kind: DebugItem,
     size: u64,
@@ -240,6 +260,10 @@ pub struct Enumeration {
 impl Enumeration {
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn namespace(&self) -> &str {
+        &self.namespace
     }
 
     pub fn size(&self) -> u64 {
@@ -282,12 +306,17 @@ pub struct Structure {
     name: String,
     members: Vec<StructureMember>,
     size: u64,
+    namespace: String,
     containing_type: Option<DebugItem>,
 }
 
 impl Structure {
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn namespace(&self) -> &str {
+        &self.namespace
     }
 
     pub fn members(&self) -> &[StructureMember] {
@@ -299,9 +328,11 @@ impl Structure {
             .iter()
             .find(|&member| member.name.as_deref() == Some(name))
     }
+
     pub fn size(&self) -> u64 {
         self.size
     }
+
     pub fn containing_type(&self) -> Option<DebugItem> {
         self.containing_type
     }
@@ -309,18 +340,25 @@ impl Structure {
 
 #[derive(Debug)]
 pub struct Array {
+    namespace: String,
     kind: DebugItem,
     lower_bound: u64,
     count: usize,
 }
 
 impl Array {
+    pub fn namespace(&self) -> &str {
+        &self.namespace
+    }
+
     pub fn kind(&self) -> DebugItem {
         self.kind
     }
+
     pub fn count(&self) -> usize {
         self.count
     }
+
     pub fn lower_bound(&self) -> u64 {
         self.lower_bound
     }
@@ -341,6 +379,7 @@ struct Subrange {
 #[derive(Debug)]
 pub struct Variable {
     name: String,
+    namespace: String,
     kind: DebugItem,
     location: MemoryLocation,
     linkage_name: Option<String>,
@@ -351,6 +390,10 @@ pub struct Variable {
 impl Variable {
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn namespace(&self) -> &str {
+        &self.namespace
     }
 
     pub fn kind(&self) -> DebugItem {
@@ -364,6 +407,7 @@ impl Variable {
     pub fn file(&self) -> Option<&str> {
         self.file.as_ref().map(|v| v.0.as_ref())
     }
+
     pub fn line(&self) -> Option<u64> {
         self.line
     }
@@ -562,6 +606,7 @@ impl UnitInfo {
                         .is_none());
                     variables.push(variable);
                 }
+
                 // This is actually an enum, not a struct. Convert it to an enum.
                 gimli::constants::DW_TAG_variant_part
                     if parent_tag == gimli::constants::DW_TAG_structure_type =>
@@ -578,6 +623,7 @@ impl UnitInfo {
                     // TODO: Parse `discr` type. For now we just assume it's the first one.
                     enumerations.push(Enumeration {
                         name: structure.name,
+                        namespace: parent_namespace.join("::"),
                         discriminant_kind: DebugItem::from_debug_info_offset(
                             gimli::DebugInfoOffset(0),
                         ),
@@ -645,7 +691,9 @@ impl UnitInfo {
                 }
 
                 gimli::constants::DW_TAG_structure_type => {
-                    let Some(structure) = parse_structure(abbrev.attrs(), unit_ref) else {
+                    let Some(structure) =
+                        parse_structure(abbrev.attrs(), &parent_namespace, unit_ref)
+                    else {
                         continue;
                     };
                     let Some(offset) = DebugItem::from_unit_offset(abbrev.offset(), unit_ref)
@@ -660,7 +708,8 @@ impl UnitInfo {
                 }
 
                 gimli::constants::DW_TAG_union_type => {
-                    let Some(new_union) = parse_union(abbrev.attrs(), unit_ref) else {
+                    let Some(new_union) = parse_union(abbrev.attrs(), &parent_namespace, unit_ref)
+                    else {
                         continue;
                     };
                     let Some(offset) = DebugItem::from_unit_offset(abbrev.offset(), unit_ref)
@@ -681,6 +730,7 @@ impl UnitInfo {
                     };
                     array_in_progress = parse_array(abbrev.attrs(), unit_ref).map(|v| (v, offset));
                 }
+
                 gimli::constants::DW_TAG_subrange_type
                     if parent_tag == gimli::constants::DW_TAG_array_type =>
                 {
@@ -692,6 +742,7 @@ impl UnitInfo {
                     };
                     let array = Array {
                         kind: array_in_progress.kind,
+                        namespace: parent_namespace.join("::"),
                         lower_bound: subrange.lower_bound,
                         count: subrange.count,
                     };
@@ -700,8 +751,10 @@ impl UnitInfo {
                         .is_none());
                     arrays.push(array);
                 }
+
                 gimli::constants::DW_TAG_pointer_type => {
-                    let Some(pointer) = parse_pointer(abbrev.attrs(), unit_ref) else {
+                    let Some(pointer) = parse_pointer(abbrev.attrs(), &parent_namespace, unit_ref)
+                    else {
                         continue;
                     };
                     let Some(offset) = abbrev.offset().to_debug_info_offset(&unit.header) else {
@@ -717,7 +770,9 @@ impl UnitInfo {
                 }
 
                 gimli::constants::DW_TAG_base_type => {
-                    let Some(base_type) = parse_base_type(abbrev.attrs(), unit_ref) else {
+                    let Some(base_type) =
+                        parse_base_type(abbrev.attrs(), &parent_namespace, unit_ref)
+                    else {
                         continue;
                     };
                     let Some(offset) = abbrev.offset().to_debug_info_offset(&unit.header) else {
@@ -1078,6 +1133,7 @@ fn parse_variable<ENDIAN: Endianity>(
             if let Some(location) = location {
                 return Some(Variable {
                     name,
+                    namespace,
                     kind,
                     location,
                     linkage_name,
@@ -1092,6 +1148,7 @@ fn parse_variable<ENDIAN: Endianity>(
 
 fn parse_structure<ENDIAN: Endianity>(
     mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
+    parent_namespace: &[String],
     unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<Structure> {
     let mut name = None;
@@ -1121,6 +1178,7 @@ fn parse_structure<ENDIAN: Endianity>(
             return Some(Structure {
                 members: vec![],
                 name,
+                namespace: parent_namespace.join("::"),
                 size,
                 containing_type,
             });
@@ -1131,6 +1189,7 @@ fn parse_structure<ENDIAN: Endianity>(
 
 fn parse_union<ENDIAN: Endianity>(
     mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
+    namespace: &[String],
     unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<Union> {
     let mut name = None;
@@ -1159,6 +1218,7 @@ fn parse_union<ENDIAN: Endianity>(
             return Some(Union {
                 members: vec![],
                 name,
+                namespace: namespace.join("::"),
                 size,
             });
         }
@@ -1335,6 +1395,7 @@ fn parse_subrange<ENDIAN: Endianity>(
 
 fn parse_pointer<ENDIAN: Endianity>(
     mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
+    namespace: &[String],
     unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<Pointer> {
     let mut name = None;
@@ -1352,11 +1413,16 @@ fn parse_pointer<ENDIAN: Endianity>(
             }
         }
     }
-    kind.map(|kind| Pointer { name, kind })
+    kind.map(|kind| Pointer {
+        name,
+        namespace: namespace.join("::"),
+        kind,
+    })
 }
 
 fn parse_base_type<ENDIAN: Endianity>(
     mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
+    namespace: &[String],
     unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<BaseType> {
     let mut name = None;
@@ -1376,7 +1442,11 @@ fn parse_base_type<ENDIAN: Endianity>(
     }
     if let Some(name) = name {
         if let Some(size) = size {
-            return Some(BaseType { name, size });
+            return Some(BaseType {
+                name,
+                namespace: namespace.join("::"),
+                size,
+            });
         }
     }
     None

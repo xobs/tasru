@@ -53,6 +53,8 @@ use std::rc::Rc;
 use debug_types::{DebugTypeError, DebugVariable};
 use unit_info::UnitInfo;
 
+use crate::debug_types::{DebugEnumeration, DebugStructure, DebugUnion};
+
 pub(crate) type GimliReader<ENDIAN> = gimli::EndianReader<ENDIAN, std::rc::Rc<[u8]>>;
 
 /// A collection of parsed Dwarf information for all compilation units within
@@ -193,6 +195,135 @@ impl DebugInfo {
             }
         }
         Err(DebugTypeError::VariableNotFound(path.into()))
+    }
+
+    /// Consult all units to look for a structure with the specified name. If the structure
+    /// cannot be found, return an error. If it's found, construct a new [Structure] at the
+    /// specified address.
+    pub fn structure_from_type_at_address(
+        &self,
+        kind: &str,
+        address: u64,
+    ) -> Result<DebugStructure, DebugTypeError> {
+        let mut matched = None;
+        let Some((namespace, name)) = kind.rsplit_once("::") else {
+            return Err(DebugTypeError::StructureNotFound {
+                owner: kind.to_owned(),
+            });
+        };
+
+        for (item, index) in &self.symbol_unit_mapping {
+            let Some(unit) = self.units.get(*index) else {
+                continue;
+            };
+            let Some(structure) = unit.structure_from_item(*item) else {
+                continue;
+            };
+
+            if structure.namespace() != namespace || structure.name() != name {
+                continue;
+            }
+            if matched.replace((structure, unit)).is_some() {
+                return Err(DebugTypeError::MultipleMatches);
+            }
+        }
+        if let Some((structure, unit)) = matched {
+            return Ok(DebugStructure::new(
+                unit,
+                self,
+                structure,
+                unit_info::MemoryLocation(address),
+            ));
+        }
+        Err(DebugTypeError::StructureNotFound {
+            owner: kind.to_owned(),
+        })
+    }
+
+    /// Consult all units to look for an enumeration with the specified name. If the enumeration
+    /// cannot be found, return an error. If it's found, construct a new [Enumeration] at the
+    /// specified address.
+    pub fn enumeration_from_type_at_address(
+        &self,
+        kind: &str,
+        address: u64,
+    ) -> Result<DebugEnumeration, DebugTypeError> {
+        let mut matched = None;
+        let Some((namespace, name)) = kind.rsplit_once("::") else {
+            return Err(DebugTypeError::EnumerationNotFound {
+                owner: kind.to_owned(),
+            });
+        };
+
+        for (item, index) in &self.symbol_unit_mapping {
+            let Some(unit) = self.units.get(*index) else {
+                continue;
+            };
+            let Some(enumeration) = unit.enumeration_from_item(*item) else {
+                continue;
+            };
+
+            if enumeration.namespace() != namespace || enumeration.name() != name {
+                continue;
+            }
+            if matched.replace((enumeration, unit)).is_some() {
+                return Err(DebugTypeError::MultipleMatches);
+            }
+        }
+        if let Some((enumeration, unit)) = matched {
+            return Ok(DebugEnumeration::new(
+                unit,
+                self,
+                enumeration,
+                unit_info::MemoryLocation(address),
+            ));
+        }
+        Err(DebugTypeError::EnumerationNotFound {
+            owner: kind.to_owned(),
+        })
+    }
+
+    /// Consult all units to look for a union with the specified name. If the union
+    /// cannot be found, return an error. If it's found, construct a new [Union] at the
+    /// specified address.
+    pub fn union_from_type_at_address(
+        &self,
+        kind: &str,
+        address: u64,
+    ) -> Result<DebugUnion, DebugTypeError> {
+        let mut matched = None;
+        let Some((namespace, name)) = kind.rsplit_once("::") else {
+            return Err(DebugTypeError::UnionNotFound {
+                owner: kind.to_owned(),
+            });
+        };
+
+        for (item, index) in &self.symbol_unit_mapping {
+            let Some(unit) = self.units.get(*index) else {
+                continue;
+            };
+            let Some(union) = unit.union_from_item(*item) else {
+                continue;
+            };
+
+            if union.namespace() != namespace || union.name() != name {
+                continue;
+            }
+            if matched.replace((union, unit)).is_some() {
+                return Err(DebugTypeError::MultipleMatches);
+            }
+        }
+        if let Some((union, unit)) = matched {
+            return Ok(DebugUnion::new(
+                unit,
+                self,
+                union,
+                unit_info::MemoryLocation(address),
+            ));
+        }
+        Err(DebugTypeError::UnionNotFound {
+            owner: kind.to_owned(),
+        })
     }
 
     /// Get the size of the specified debug item. Any debug item may be specified here,

@@ -8,6 +8,8 @@ use crate::{
 
 #[derive(Debug)]
 pub enum DebugTypeError {
+    /// Multiple items matched the given path
+    MultipleMatches,
     MemberNotFound {
         owner: String,
         member: String,
@@ -118,6 +120,9 @@ impl core::fmt::Display for DebugTypeError {
                 write!(f, "An error occurred when reading memory from the target")
             }
             DebugTypeError::LocationMissing => write!(f, "There was no location data available"),
+            DebugTypeError::MultipleMatches => {
+                write!(f, "Multiple items matched the specified string")
+            }
         }
     }
 }
@@ -551,6 +556,21 @@ pub struct DebugUnion<'a> {
 }
 
 impl<'a> DebugUnion<'a> {
+    pub(crate) fn new(
+        unit: &'a unit_info::UnitInfo,
+        info: &'a DebugInfo,
+        union: &'a unit_info::Union,
+        location: unit_info::MemoryLocation,
+    ) -> Self {
+        Self {
+            unit,
+            info,
+            location: Some(location),
+            offset: unit_info::StructOffset::new(0),
+            union,
+        }
+    }
+
     pub fn member_named(&self, name: &str) -> Result<DebugStructureMember<'a>, DebugTypeError> {
         self.union
             .member_named(name)
@@ -727,6 +747,21 @@ pub struct DebugStructure<'a> {
 }
 
 impl<'a> DebugStructure<'a> {
+    pub(crate) fn new(
+        unit: &'a unit_info::UnitInfo,
+        info: &'a DebugInfo,
+        structure: &'a unit_info::Structure,
+        location: unit_info::MemoryLocation,
+    ) -> Self {
+        DebugStructure {
+            unit,
+            info,
+            location: Some(location),
+            offset: unit_info::StructOffset::new(0),
+            structure,
+        }
+    }
+
     pub fn member_named(&self, name: &str) -> Result<DebugStructureMember<'a>, DebugTypeError> {
         self.structure
             .member_named(name)
@@ -936,6 +971,21 @@ pub struct DebugEnumeration<'a> {
 }
 
 impl<'a> DebugEnumeration<'a> {
+    pub(crate) fn new(
+        unit: &'a unit_info::UnitInfo,
+        info: &'a DebugInfo,
+        enumeration: &'a unit_info::Enumeration,
+        location: unit_info::MemoryLocation,
+    ) -> Self {
+        Self {
+            unit,
+            info,
+            location: Some(location),
+            offset: unit_info::StructOffset::new(0),
+            enumeration,
+        }
+    }
+
     pub fn discriminant_size(&self) -> Result<u64, DebugTypeError> {
         let discriminant = self
             .info
