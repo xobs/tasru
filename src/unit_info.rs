@@ -131,6 +131,22 @@ impl StructureMember {
     }
 }
 
+#[derive(Debug)]
+pub struct GenericParameter {
+    name: Option<String>,
+    kind: DebugItem,
+}
+
+impl GenericParameter {
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    pub fn kind(&self) -> DebugItem {
+        self.kind
+    }
+}
+
 pub struct Pointer {
     name: Option<String>,
     namespace: String,
@@ -305,6 +321,7 @@ impl Enumeration {
 pub struct Structure {
     name: String,
     members: Vec<StructureMember>,
+    generics: Vec<GenericParameter>,
     size: u64,
     namespace: String,
     containing_type: Option<DebugItem>,
@@ -327,6 +344,10 @@ impl Structure {
         self.members
             .iter()
             .find(|&member| member.name.as_deref() == Some(name))
+    }
+
+    pub fn generics(&self) -> &[GenericParameter] {
+        &self.generics
     }
 
     pub fn size(&self) -> u64 {
@@ -675,6 +696,16 @@ impl UnitInfo {
                     if let Some(member) = parse_structure_member(abbrev.attrs(), unit_ref) {
                         if let Some(last) = structures.last_mut() {
                             last.members.push(member);
+                        }
+                    }
+                }
+
+                gimli::constants::DW_TAG_template_type_parameter
+                    if parent_tag == gimli::constants::DW_TAG_structure_type =>
+                {
+                    if let Some(generic) = parse_generic_parameter(abbrev.attrs(), unit_ref) {
+                        if let Some(last) = structures.last_mut() {
+                            last.generics.push(generic);
                         }
                     }
                 }
@@ -1191,6 +1222,7 @@ fn parse_structure<ENDIAN: Endianity>(
 
             return Some(Structure {
                 members: vec![],
+                generics: vec![],
                 name: name.into(),
                 namespace,
                 size,
@@ -1283,6 +1315,38 @@ fn parse_structure_member<ENDIAN: Endianity>(
     let offset = offset.unwrap_or(StructOffset(0));
     if let Some(kind) = kind {
         return Some(StructureMember { name, kind, offset });
+    }
+    None
+}
+
+fn parse_generic_parameter<ENDIAN: Endianity>(
+    mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
+) -> Option<GenericParameter> {
+    let mut name = None;
+    let mut kind = None;
+    while let Ok(Some(attr)) = attrs.next() {
+        match attr.name() {
+            gimli::constants::DW_AT_name => name = parse_string(attr.value(), unit_ref),
+            gimli::constants::DW_AT_type => kind = parse_type(attr, unit_ref),
+            gimli::constants::DW_AT_data_member_location => {}
+            gimli::constants::DW_AT_alignment => {}
+            gimli::constants::DW_AT_accessibility => {}
+            gimli::constants::DW_AT_decl_line => {}
+            gimli::constants::DW_AT_decl_file => {}
+            gimli::constants::DW_AT_declaration => {}
+            gimli::constants::DW_AT_data_bit_offset => {}
+            gimli::constants::DW_AT_bit_size => {}
+            _ => {
+                log::error!(
+                    "Unrecognized struct member attr: {}",
+                    attr.name().static_string().unwrap_or("<unknown>")
+                );
+            }
+        }
+    }
+    if let Some(kind) = kind {
+        return Some(GenericParameter { name, kind });
     }
     None
 }

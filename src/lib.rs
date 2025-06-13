@@ -269,6 +269,39 @@ impl DebugInfo {
         })
     }
 
+    pub fn structure_from_item_at_address(
+        &self,
+        target_item: &unit_info::DebugItem,
+        address: u64,
+    ) -> Result<DebugStructure, DebugTypeError> {
+        for (item, index) in &self.symbol_unit_mapping {
+            if target_item != item {
+                continue;
+            }
+
+            let Some(unit) = self.units.get(*index) else {
+                continue;
+            };
+            let Some(structure) = unit.structure_from_item(*item) else {
+                continue;
+            };
+
+            // Multiple DIEs can represent the same struct if the struct is used across multiple
+            // compilation units. We return the first DIE that we come across, although I'm not sure
+            // if this is correct in all cases.
+            return Ok(DebugStructure::new(
+                unit,
+                self,
+                structure,
+                unit_info::MemoryLocation(address),
+            ));
+        }
+
+        Err(DebugTypeError::StructureNotFound {
+            owner: "".to_owned(),
+        })
+    }
+
     /// Consult all units to look for an enumeration with the specified name. If the enumeration
     /// cannot be found, return an error. If it's found, construct a new [Enumeration] at the
     /// specified address.

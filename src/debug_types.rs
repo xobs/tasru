@@ -14,6 +14,9 @@ pub enum DebugTypeError {
         owner: String,
         member: String,
     },
+    GenericNotFound {
+        owner: String,
+    },
     StructureNotFound {
         owner: String,
     },
@@ -73,6 +76,9 @@ impl core::fmt::Display for DebugTypeError {
             }
             DebugTypeError::MemberNotFound { owner, member } => {
                 write!(f, "Member \"{}\" not found in struct \"{}\"", member, owner)
+            }
+            DebugTypeError::GenericNotFound { owner } => {
+                write!(f, "Generic not found in struct \"{}\"", owner)
             }
             DebugTypeError::VariableNotFound(v) => {
                 write!(f, "Variable \"{}\" could not be found", v)
@@ -900,12 +906,19 @@ impl<'a> DebugPointer<'a> {
         let location = self.location?.0 + offset;
         memory_source.read_u8(location).ok()
     }
+
+    pub fn location(&self) -> Result<u64, DebugTypeError> {
+        self.location
+            .ok_or(DebugTypeError::LocationMissing)
+            .map(|location| location.0)
+    }
 }
 
 impl core::fmt::Debug for DebugPointer<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DebugPointer")
             .field("pointer", &self.pointer)
+            .field("location", &self.location)
             .finish()
     }
 }
