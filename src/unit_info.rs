@@ -1,7 +1,7 @@
 use gimli::{DW_AT_name, Endianity, Reader};
 use std::collections::HashMap;
 
-use crate::GimliReader;
+use crate::{split_namespace_and_name, GimliReader};
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 /// A location within the debug section
@@ -1148,7 +1148,7 @@ fn parse_variable<ENDIAN: Endianity>(
 
 fn parse_structure<ENDIAN: Endianity>(
     mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
-    parent_namespace: &[String],
+    namespace: &[String],
     unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
 ) -> Option<Structure> {
     let mut name = None;
@@ -1175,10 +1175,24 @@ fn parse_structure<ENDIAN: Endianity>(
     }
     if let Some(name) = name {
         if let Some(size) = size {
+            // The namespace may be included in name and not through the DW_AT_namespace tag.
+            // Attempt to decode the namespace in the name.
+            let (decoded_namespace, name) = split_namespace_and_name(&name);
+
+            let namespace = if decoded_namespace.is_empty() {
+                namespace.join("::")
+            } else {
+                let decoded_namespace: Vec<String> =
+                    decoded_namespace.split("::").map(str::to_string).collect();
+                let mut namespace = namespace.to_vec();
+                namespace.extend(decoded_namespace);
+                namespace.join("::")
+            };
+
             return Some(Structure {
                 members: vec![],
-                name,
-                namespace: parent_namespace.join("::"),
+                name: name.into(),
+                namespace,
                 size,
                 containing_type,
             });
@@ -1215,10 +1229,24 @@ fn parse_union<ENDIAN: Endianity>(
     }
     if let Some(name) = name {
         if let Some(size) = size {
+            // The namespace may be included in name and not through the DW_AT_namespace tag.
+            // Attempt to decode the namespace in the name.
+            let (decoded_namespace, name) = split_namespace_and_name(&name);
+
+            let namespace = if decoded_namespace.is_empty() {
+                namespace.join("::")
+            } else {
+                let decoded_namespace: Vec<String> =
+                    decoded_namespace.split("::").map(str::to_string).collect();
+                let mut namespace = namespace.to_vec();
+                namespace.extend(decoded_namespace);
+                namespace.join("::")
+            };
+
             return Some(Union {
                 members: vec![],
-                name,
-                namespace: namespace.join("::"),
+                name: name.into(),
+                namespace,
                 size,
             });
         }
