@@ -111,6 +111,34 @@ impl core::fmt::Display for DebugInfoError {
 
 impl std::error::Error for DebugInfoError {}
 
+pub(crate) fn split_namespace_and_name(kind: &str) -> (&str, &str) {
+    // If the kind is a reference, mut reference, or anything else that's not a normal struct, do
+    // not attempt to split out the namespace.
+    if let Some(first_char) = kind.chars().next() {
+        if !first_char.is_ascii_alphabetic() && first_char != '_' {
+            return ("", kind);
+        }
+    }
+
+    if kind.starts_with("dyn ") {
+        return ("", kind);
+    }
+
+    let (kind_without_generic, _generic) = if let Some(open_bracket_index) = kind.find('<') {
+        kind.split_at(open_bracket_index)
+    } else {
+        (kind, "")
+    };
+
+    if let Some(separator_index) = kind_without_generic.rfind("::") {
+        let (namespace, rest) = kind.split_at(separator_index);
+        let (_separator, name) = rest.split_at(2);
+        (namespace, name)
+    } else {
+        ("", kind)
+    }
+}
+
 impl DebugInfo {
     /// Create a new [DebugInfo] object from the Elf file pointed to at the specified file path.
     /// This will parse the file and extract each unit section, then perform a comprehensive parse
@@ -205,12 +233,13 @@ impl DebugInfo {
         kind: &str,
         address: u64,
     ) -> Result<DebugStructure, DebugTypeError> {
-        let mut matched = None;
-        let Some((namespace, name)) = kind.rsplit_once("::") else {
+        let (namespace, name) = split_namespace_and_name(kind);
+
+        if namespace.is_empty() {
             return Err(DebugTypeError::StructureNotFound {
                 owner: kind.to_owned(),
             });
-        };
+        }
 
         for (item, index) in &self.symbol_unit_mapping {
             let Some(unit) = self.units.get(*index) else {
@@ -223,11 +252,10 @@ impl DebugInfo {
             if structure.namespace() != namespace || structure.name() != name {
                 continue;
             }
-            if matched.replace((structure, unit)).is_some() {
-                return Err(DebugTypeError::MultipleMatches);
-            }
-        }
-        if let Some((structure, unit)) = matched {
+
+            // Multiple DIEs can represent the same struct if the struct is used across multiple
+            // compilation units. We return the first DIE that we come across, although I'm not sure
+            // if this is correct in all cases.
             return Ok(DebugStructure::new(
                 unit,
                 self,
@@ -235,6 +263,7 @@ impl DebugInfo {
                 unit_info::MemoryLocation(address),
             ));
         }
+
         Err(DebugTypeError::StructureNotFound {
             owner: kind.to_owned(),
         })
@@ -248,12 +277,13 @@ impl DebugInfo {
         kind: &str,
         address: u64,
     ) -> Result<DebugEnumeration, DebugTypeError> {
-        let mut matched = None;
-        let Some((namespace, name)) = kind.rsplit_once("::") else {
-            return Err(DebugTypeError::EnumerationNotFound {
+        let (namespace, name) = split_namespace_and_name(kind);
+
+        if namespace.is_empty() {
+            return Err(DebugTypeError::StructureNotFound {
                 owner: kind.to_owned(),
             });
-        };
+        }
 
         for (item, index) in &self.symbol_unit_mapping {
             let Some(unit) = self.units.get(*index) else {
@@ -266,11 +296,7 @@ impl DebugInfo {
             if enumeration.namespace() != namespace || enumeration.name() != name {
                 continue;
             }
-            if matched.replace((enumeration, unit)).is_some() {
-                return Err(DebugTypeError::MultipleMatches);
-            }
-        }
-        if let Some((enumeration, unit)) = matched {
+
             return Ok(DebugEnumeration::new(
                 unit,
                 self,
@@ -278,6 +304,7 @@ impl DebugInfo {
                 unit_info::MemoryLocation(address),
             ));
         }
+
         Err(DebugTypeError::EnumerationNotFound {
             owner: kind.to_owned(),
         })
@@ -291,12 +318,13 @@ impl DebugInfo {
         kind: &str,
         address: u64,
     ) -> Result<DebugUnion, DebugTypeError> {
-        let mut matched = None;
-        let Some((namespace, name)) = kind.rsplit_once("::") else {
-            return Err(DebugTypeError::UnionNotFound {
+        let (namespace, name) = split_namespace_and_name(kind);
+
+        if namespace.is_empty() {
+            return Err(DebugTypeError::StructureNotFound {
                 owner: kind.to_owned(),
             });
-        };
+        }
 
         for (item, index) in &self.symbol_unit_mapping {
             let Some(unit) = self.units.get(*index) else {
@@ -309,11 +337,7 @@ impl DebugInfo {
             if union.namespace() != namespace || union.name() != name {
                 continue;
             }
-            if matched.replace((union, unit)).is_some() {
-                return Err(DebugTypeError::MultipleMatches);
-            }
-        }
-        if let Some((union, unit)) = matched {
+
             return Ok(DebugUnion::new(
                 unit,
                 self,
@@ -321,6 +345,7 @@ impl DebugInfo {
                 unit_info::MemoryLocation(address),
             ));
         }
+
         Err(DebugTypeError::UnionNotFound {
             owner: kind.to_owned(),
         })
