@@ -30,7 +30,7 @@ impl DebugItem {
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 /// A location within the running target
-pub struct MemoryLocation(pub(crate) u64);
+pub struct MemoryLocation(pub u64);
 
 impl core::fmt::Display for MemoryLocation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -874,6 +874,14 @@ impl UnitInfo {
             .variable_address
             .get(&location)
             .and_then(|addr| self.cache.variables.get(addr.0))
+    }
+
+    pub fn find_variable<P>(&self, predicate: P) -> Option<&Variable>
+    where
+        Self: Sized,
+        P: Fn(&&Variable) -> bool,
+    {
+        self.cache.variables.iter().find(predicate)
     }
 
     pub fn structure_from_item(&self, location: DebugItem) -> Option<&Structure> {

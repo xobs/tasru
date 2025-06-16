@@ -51,7 +51,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use debug_types::{DebugTypeError, DebugVariable};
-use unit_info::UnitInfo;
+use unit_info::{UnitInfo, Variable};
 
 use crate::debug_types::{DebugEnumeration, DebugStructure, DebugUnion};
 
@@ -223,6 +223,19 @@ impl DebugInfo {
             }
         }
         Err(DebugTypeError::VariableNotFound(path.into()))
+    }
+
+    pub fn find_variable<P>(&self, predicate: P) -> Result<DebugVariable, DebugTypeError>
+    where
+        Self: Sized,
+        P: Fn(&&Variable) -> bool,
+    {
+        for unit in &self.units {
+            if let Some(variable) = unit.find_variable(&predicate) {
+                return Ok(DebugVariable::new(unit, self, variable));
+            }
+        }
+        Err(DebugTypeError::VariableNotFound("".into()))
     }
 
     /// Consult all units to look for a structure with the specified name. If the structure
