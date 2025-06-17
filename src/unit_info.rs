@@ -30,7 +30,7 @@ impl DebugItem {
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 /// A location within the running target
-pub struct MemoryLocation(pub(crate) u64);
+pub struct MemoryLocation(pub u64);
 
 impl core::fmt::Display for MemoryLocation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -128,6 +128,22 @@ impl StructureMember {
 
     pub fn offset(&self) -> StructOffset {
         self.offset
+    }
+}
+
+#[derive(Debug)]
+pub struct GenericParameter {
+    name: Option<String>,
+    kind: DebugItem,
+}
+
+impl GenericParameter {
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    pub fn kind(&self) -> DebugItem {
+        self.kind
     }
 }
 
@@ -305,6 +321,7 @@ impl Enumeration {
 pub struct Structure {
     name: String,
     members: Vec<StructureMember>,
+    generics: Vec<GenericParameter>,
     size: u64,
     namespace: String,
     containing_type: Option<DebugItem>,
@@ -327,6 +344,10 @@ impl Structure {
         self.members
             .iter()
             .find(|&member| member.name.as_deref() == Some(name))
+    }
+
+    pub fn generics(&self) -> &[GenericParameter] {
+        &self.generics
     }
 
     pub fn size(&self) -> u64 {
@@ -679,6 +700,16 @@ impl UnitInfo {
                     }
                 }
 
+                gimli::constants::DW_TAG_template_type_parameter
+                    if parent_tag == gimli::constants::DW_TAG_structure_type =>
+                {
+                    if let Some(generic) = parse_generic_parameter(abbrev.attrs(), unit_ref) {
+                        if let Some(last) = structures.last_mut() {
+                            last.generics.push(generic);
+                        }
+                    }
+                }
+
                 // Union member
                 gimli::constants::DW_TAG_member
                     if parent_tag == gimli::constants::DW_TAG_union_type =>
@@ -843,6 +874,14 @@ impl UnitInfo {
             .variable_address
             .get(&location)
             .and_then(|addr| self.cache.variables.get(addr.0))
+    }
+
+    pub fn find_variable<P>(&self, predicate: P) -> Option<&Variable>
+    where
+        Self: Sized,
+        P: Fn(&&Variable) -> bool,
+    {
+        self.cache.variables.iter().find(predicate)
     }
 
     pub fn structure_from_item(&self, location: DebugItem) -> Option<&Structure> {
@@ -1191,6 +1230,7 @@ fn parse_structure<ENDIAN: Endianity>(
 
             return Some(Structure {
                 members: vec![],
+                generics: vec![],
                 name: name.into(),
                 namespace,
                 size,
@@ -1283,6 +1323,38 @@ fn parse_structure_member<ENDIAN: Endianity>(
     let offset = offset.unwrap_or(StructOffset(0));
     if let Some(kind) = kind {
         return Some(StructureMember { name, kind, offset });
+    }
+    None
+}
+
+fn parse_generic_parameter<ENDIAN: Endianity>(
+    mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
+) -> Option<GenericParameter> {
+    let mut name = None;
+    let mut kind = None;
+    while let Ok(Some(attr)) = attrs.next() {
+        match attr.name() {
+            gimli::constants::DW_AT_name => name = parse_string(attr.value(), unit_ref),
+            gimli::constants::DW_AT_type => kind = parse_type(attr, unit_ref),
+            gimli::constants::DW_AT_data_member_location => {}
+            gimli::constants::DW_AT_alignment => {}
+            gimli::constants::DW_AT_accessibility => {}
+            gimli::constants::DW_AT_decl_line => {}
+            gimli::constants::DW_AT_decl_file => {}
+            gimli::constants::DW_AT_declaration => {}
+            gimli::constants::DW_AT_data_bit_offset => {}
+            gimli::constants::DW_AT_bit_size => {}
+            _ => {
+                log::error!(
+                    "Unrecognized struct member attr: {}",
+                    attr.name().static_string().unwrap_or("<unknown>")
+                );
+            }
+        }
+    }
+    if let Some(kind) = kind {
+        return Some(GenericParameter { name, kind });
     }
     None
 }

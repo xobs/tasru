@@ -51,7 +51,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use debug_types::{DebugTypeError, DebugVariable};
-use unit_info::UnitInfo;
+use unit_info::{UnitInfo, Variable};
 
 use crate::debug_types::{DebugEnumeration, DebugStructure, DebugUnion};
 
@@ -225,6 +225,19 @@ impl DebugInfo {
         Err(DebugTypeError::VariableNotFound(path.into()))
     }
 
+    pub fn find_variable<P>(&self, predicate: P) -> Result<DebugVariable, DebugTypeError>
+    where
+        Self: Sized,
+        P: Fn(&&Variable) -> bool,
+    {
+        for unit in &self.units {
+            if let Some(variable) = unit.find_variable(&predicate) {
+                return Ok(DebugVariable::new(unit, self, variable));
+            }
+        }
+        Err(DebugTypeError::VariableNotFound("".into()))
+    }
+
     /// Consult all units to look for a structure with the specified name. If the structure
     /// cannot be found, return an error. If it's found, construct a new [Structure] at the
     /// specified address.
@@ -266,6 +279,39 @@ impl DebugInfo {
 
         Err(DebugTypeError::StructureNotFound {
             owner: kind.to_owned(),
+        })
+    }
+
+    pub fn structure_from_item_at_address(
+        &self,
+        target_item: &unit_info::DebugItem,
+        address: u64,
+    ) -> Result<DebugStructure, DebugTypeError> {
+        for (item, index) in &self.symbol_unit_mapping {
+            if target_item != item {
+                continue;
+            }
+
+            let Some(unit) = self.units.get(*index) else {
+                continue;
+            };
+            let Some(structure) = unit.structure_from_item(*item) else {
+                continue;
+            };
+
+            // Multiple DIEs can represent the same struct if the struct is used across multiple
+            // compilation units. We return the first DIE that we come across, although I'm not sure
+            // if this is correct in all cases.
+            return Ok(DebugStructure::new(
+                unit,
+                self,
+                structure,
+                unit_info::MemoryLocation(address),
+            ));
+        }
+
+        Err(DebugTypeError::StructureNotFound {
+            owner: "".to_owned(),
         })
     }
 
