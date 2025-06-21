@@ -205,7 +205,7 @@ impl DebugInfo {
     pub fn variable_from_demangled_name(
         &self,
         path: &str,
-    ) -> Result<DebugVariable, DebugTypeError> {
+    ) -> Result<DebugVariable<'_>, DebugTypeError> {
         for unit in &self.units {
             if let Some(variable) = unit.variable_from_demangled_name(path) {
                 return Ok(DebugVariable::new(unit, self, variable));
@@ -216,7 +216,7 @@ impl DebugInfo {
 
     /// Consult all units to look for a variant with the specified name. If the variable
     /// cannot be found, return an error. The variable name will not be demangled.
-    pub fn variable_from_name(&self, path: &str) -> Result<DebugVariable, DebugTypeError> {
+    pub fn variable_from_name(&self, path: &str) -> Result<DebugVariable<'_>, DebugTypeError> {
         for unit in &self.units {
             if let Some(variable) = unit.variable_from_name(path) {
                 return Ok(DebugVariable::new(unit, self, variable));
@@ -225,7 +225,7 @@ impl DebugInfo {
         Err(DebugTypeError::VariableNotFound(path.into()))
     }
 
-    pub fn find_variable<P>(&self, predicate: P) -> Result<DebugVariable, DebugTypeError>
+    pub fn find_variable<P>(&self, predicate: P) -> Result<DebugVariable<'_>, DebugTypeError>
     where
         Self: Sized,
         P: Fn(&&Variable) -> bool,
@@ -245,7 +245,7 @@ impl DebugInfo {
         &self,
         kind: &str,
         address: u64,
-    ) -> Result<DebugStructure, DebugTypeError> {
+    ) -> Result<DebugStructure<'_>, DebugTypeError> {
         let (namespace, name) = split_namespace_and_name(kind);
 
         if namespace.is_empty() {
@@ -286,7 +286,7 @@ impl DebugInfo {
         &self,
         target_item: &unit_info::DebugItem,
         address: u64,
-    ) -> Result<DebugStructure, DebugTypeError> {
+    ) -> Result<DebugStructure<'_>, DebugTypeError> {
         for (item, index) in &self.symbol_unit_mapping {
             if target_item != item {
                 continue;
@@ -322,7 +322,7 @@ impl DebugInfo {
         &self,
         kind: &str,
         address: u64,
-    ) -> Result<DebugEnumeration, DebugTypeError> {
+    ) -> Result<DebugEnumeration<'_>, DebugTypeError> {
         let (namespace, name) = split_namespace_and_name(kind);
 
         if namespace.is_empty() {
@@ -363,7 +363,7 @@ impl DebugInfo {
         &self,
         kind: &str,
         address: u64,
-    ) -> Result<DebugUnion, DebugTypeError> {
+    ) -> Result<DebugUnion<'_>, DebugTypeError> {
         let (namespace, name) = split_namespace_and_name(kind);
 
         if namespace.is_empty() {
