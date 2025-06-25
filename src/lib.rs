@@ -43,7 +43,7 @@ pub mod extract;
 pub mod memory;
 pub mod unit_info;
 
-use gimli::{read::EndianRcSlice, BigEndian, Endianity, LittleEndian};
+use gimli::{BigEndian, Endianity, LittleEndian, read::EndianRcSlice};
 use object::{Object, ObjectSection};
 use std::borrow;
 use std::collections::HashMap;

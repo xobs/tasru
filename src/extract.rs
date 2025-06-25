@@ -209,8 +209,10 @@ pub(crate) fn expression_to_piece<ENDIAN: Endianity>(
             // }
             unimplemented_expression => {
                 return Err(ExtractError::WarnAndContinue {
-                    message: format!("Unimplemented: Expressions that include {unimplemented_expression:?} are not currently supported."
-                )});
+                    message: format!(
+                        "Unimplemented: Expressions that include {unimplemented_expression:?} are not currently supported."
+                    ),
+                });
             }
         }
     }
@@ -229,7 +231,10 @@ pub(crate) fn evaluate_expression<ENDIAN: Endianity>(
         let location = if address >= u32::MAX as u64
         /*&& !memory.supports_native_64bit_access()*/
         {
-            VariableLocation::Error(format!("The memory location for this variable value ({:#010X}) is invalid. Please report this as a bug.", address))
+            VariableLocation::Error(format!(
+                "The memory location for this variable value ({:#010X}) is invalid. Please report this as a bug.",
+                address
+            ))
         } else {
             VariableLocation::Address(address)
         };

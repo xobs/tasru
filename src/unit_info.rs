@@ -1,7 +1,7 @@
 use gimli::{DW_AT_name, Endianity, Reader};
 use std::collections::HashMap;
 
-use crate::{split_namespace_and_name, GimliReader};
+use crate::{GimliReader, split_namespace_and_name};
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 /// A location within the debug section
@@ -586,9 +586,11 @@ impl UnitInfo {
                     // Generally, the linkage name is the one used.
                     if let Some(linkage_name) = &variable.linkage_name {
                         log::trace!("Adding variable {} to unit", linkage_name);
-                        assert!(variable_names
-                            .insert(linkage_name.clone(), EntryIndex(variables.len()))
-                            .is_none());
+                        assert!(
+                            variable_names
+                                .insert(linkage_name.clone(), EntryIndex(variables.len()))
+                                .is_none()
+                        );
                         let demangled_linkage_name =
                             format!("{:#}", rustc_demangle::demangle(linkage_name));
                         if demangled_linkage_name != demangled_name {
@@ -596,9 +598,11 @@ impl UnitInfo {
                                 "Adding demangled variable {} to unit",
                                 demangled_linkage_name
                             );
-                            assert!(demangled_variable_names
-                                .insert(demangled_linkage_name, EntryIndex(variables.len()))
-                                .is_none());
+                            assert!(
+                                demangled_variable_names
+                                    .insert(demangled_linkage_name, EntryIndex(variables.len()))
+                                    .is_none()
+                            );
                         }
 
                         // Add the ordinary variable name if it's different from the linkage name.
@@ -617,14 +621,18 @@ impl UnitInfo {
                             // variable name. This is because we add the namespace information to
                             // disambiguate variables with the same name in different namespaces.
                             // Ignore duplicates where the address is the same.
-                            assert!(demangled_variable_names
-                                .insert(demangled_name, EntryIndex(variables.len()))
-                                .is_none());
+                            assert!(
+                                demangled_variable_names
+                                    .insert(demangled_name, EntryIndex(variables.len()))
+                                    .is_none()
+                            );
                         }
                     }
-                    assert!(variable_address
-                        .insert(offset, EntryIndex(variables.len()),)
-                        .is_none());
+                    assert!(
+                        variable_address
+                            .insert(offset, EntryIndex(variables.len()),)
+                            .is_none()
+                    );
                     variables.push(variable);
                 }
 
@@ -731,9 +739,11 @@ impl UnitInfo {
                     else {
                         continue;
                     };
-                    assert!(structure_address
-                        .insert(offset, EntryIndex(structures.len()))
-                        .is_none());
+                    assert!(
+                        structure_address
+                            .insert(offset, EntryIndex(structures.len()))
+                            .is_none()
+                    );
                     last_structure_address = Some(offset);
                     structures.push(structure);
                 }
@@ -747,9 +757,11 @@ impl UnitInfo {
                     else {
                         continue;
                     };
-                    assert!(union_address
-                        .insert(offset, EntryIndex(unions.len()))
-                        .is_none());
+                    assert!(
+                        union_address
+                            .insert(offset, EntryIndex(unions.len()))
+                            .is_none()
+                    );
                     last_structure_address = Some(offset);
                     unions.push(new_union);
                 }
@@ -769,7 +781,9 @@ impl UnitInfo {
                         continue;
                     };
                     let Some((array_in_progress, offset)) = array_in_progress.take() else {
-                        panic!("Got a subrange without an array in progress! Are there two subtypes? Or no array type?");
+                        panic!(
+                            "Got a subrange without an array in progress! Are there two subtypes? Or no array type?"
+                        );
                     };
                     let array = Array {
                         kind: array_in_progress.kind,
@@ -777,9 +791,11 @@ impl UnitInfo {
                         lower_bound: subrange.lower_bound,
                         count: subrange.count,
                     };
-                    assert!(array_address
-                        .insert(offset, EntryIndex(arrays.len()))
-                        .is_none());
+                    assert!(
+                        array_address
+                            .insert(offset, EntryIndex(arrays.len()))
+                            .is_none()
+                    );
                     arrays.push(array);
                 }
 
@@ -791,12 +807,14 @@ impl UnitInfo {
                     let Some(offset) = abbrev.offset().to_debug_info_offset(&unit.header) else {
                         continue;
                     };
-                    assert!(pointer_address
-                        .insert(
-                            DebugItem::from_debug_info_offset(offset),
-                            EntryIndex(pointers.len())
-                        )
-                        .is_none());
+                    assert!(
+                        pointer_address
+                            .insert(
+                                DebugItem::from_debug_info_offset(offset),
+                                EntryIndex(pointers.len())
+                            )
+                            .is_none()
+                    );
                     pointers.push(pointer);
                 }
 
@@ -809,12 +827,14 @@ impl UnitInfo {
                     let Some(offset) = abbrev.offset().to_debug_info_offset(&unit.header) else {
                         continue;
                     };
-                    assert!(base_type_address
-                        .insert(
-                            DebugItem::from_debug_info_offset(offset),
-                            EntryIndex(base_types.len())
-                        )
-                        .is_none());
+                    assert!(
+                        base_type_address
+                            .insert(
+                                DebugItem::from_debug_info_offset(offset),
+                                EntryIndex(base_types.len())
+                            )
+                            .is_none()
+                    );
                     base_types.push(base_type);
                 }
 

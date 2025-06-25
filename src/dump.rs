@@ -298,7 +298,7 @@ fn dump_exprloc<ENDIAN: Endianity>(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut pc = data.0.clone();
     let mut space = false;
-    while pc.len() != 0 {
+    while !pc.is_empty() {
         let pc_clone = pc.clone();
         match gimli::Operation::parse(&mut pc, unit.encoding()) {
             Ok(op) => {

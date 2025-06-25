@@ -1,9 +1,9 @@
 use std::fmt::Debug;
 
 use crate::{
+    DebugInfo,
     memory::Read,
     unit_info::{self, MemoryLocation, StructOffset},
-    DebugInfo,
 };
 
 #[derive(Debug)]
