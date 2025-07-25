@@ -50,8 +50,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 
-use debug_types::{DebugTypeError, DebugVariable};
-use unit_info::{UnitInfo, Variable};
+use debug_types::{DebugBaseType, DebugTypeError, DebugVariable};
+use unit_info::{MemoryLocation, StructOffset, UnitInfo, Variable};
 
 use crate::debug_types::{DebugEnumeration, DebugStructure, DebugUnion};
 
@@ -394,6 +394,35 @@ impl DebugInfo {
 
         Err(DebugTypeError::UnionNotFound {
             owner: kind.to_owned(),
+        })
+    }
+
+    pub fn base_type_from_item_at_address(
+        &self,
+        target_item: &unit_info::DebugItem,
+        address: u64,
+    ) -> Result<DebugBaseType<'_>, DebugTypeError> {
+        for (item, index) in &self.symbol_unit_mapping {
+            if target_item != item {
+                continue;
+            }
+
+            let Some(unit) = self.units.get(*index) else {
+                continue;
+            };
+            let Some(base_type) = unit.base_type_from_item(*item) else {
+                continue;
+            };
+
+            return Ok(DebugBaseType {
+                location: Some(MemoryLocation(address)),
+                offset: StructOffset(0),
+                base_type,
+            });
+        }
+
+        Err(DebugTypeError::BaseTypeNotFound {
+            owner: "".to_string(),
         })
     }
 
