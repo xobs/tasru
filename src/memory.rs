@@ -46,6 +46,29 @@ pub trait Read {
         ]))
     }
 
+    /// Read one 128-bit value from the specified address. The address does
+    /// not need to be aligned, but performance may be improved if it is.
+    fn read_u128(&mut self, address: u64) -> Result<u128, Self::Error> {
+        Ok(u128::from_le_bytes([
+            self.read_u8(address)?,
+            self.read_u8(address + 1)?,
+            self.read_u8(address + 2)?,
+            self.read_u8(address + 3)?,
+            self.read_u8(address + 4)?,
+            self.read_u8(address + 5)?,
+            self.read_u8(address + 6)?,
+            self.read_u8(address + 7)?,
+            self.read_u8(address + 8)?,
+            self.read_u8(address + 9)?,
+            self.read_u8(address + 10)?,
+            self.read_u8(address + 11)?,
+            self.read_u8(address + 12)?,
+            self.read_u8(address + 13)?,
+            self.read_u8(address + 14)?,
+            self.read_u8(address + 15)?,
+        ]))
+    }
+
     /// Read data into the buffer. If an error occurs, then the buffer contents
     /// are undefined and may contain partial data.
     fn read(&mut self, data: &mut [u8], address: u64) -> Result<(), Self::Error> {
@@ -86,6 +109,13 @@ pub trait Write {
     }
 
     fn write_u64(&mut self, data: u64, address: u64) -> Result<(), Self::Error> {
+        for (offset, data) in data.to_le_bytes().into_iter().enumerate() {
+            self.write_u8(data, address + offset as u64)?;
+        }
+        Ok(())
+    }
+
+    fn write_u128(&mut self, data: u128, address: u64) -> Result<(), Self::Error> {
         for (offset, data) in data.to_le_bytes().into_iter().enumerate() {
             self.write_u8(data, address + offset as u64)?;
         }
