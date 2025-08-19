@@ -189,6 +189,19 @@ impl<'a> DebugArrayItem<'a> {
             })
     }
 
+    pub fn base_type(&self) -> Result<DebugBaseType<'a>, DebugTypeError> {
+        self.info
+            .base_type_from_item(self.kind)
+            .map(|base_type| DebugBaseType {
+                location: self.location,
+                offset: self.offset,
+                base_type,
+            })
+            .ok_or_else(|| DebugTypeError::BaseTypeNotFound {
+                owner: self.parent_name.clone(),
+            })
+    }
+
     /// Treat the Array as a `u8`. This can be useful for reading strings, which are
     /// generally stored as arrays of u8 values.
     pub fn u8<S: Read + ?Sized>(&self, memory_source: &mut S) -> Option<u8> {
@@ -241,12 +254,12 @@ impl<'a> Iterator for DebugArrayIterator<'a> {
 /// An array of values in memory. The size of the array is taken from the Dwarf data and
 /// is fixed at compile time.
 pub struct DebugArray<'a> {
-    unit: &'a unit_info::UnitInfo,
-    info: &'a DebugInfo,
-    location: Option<unit_info::MemoryLocation>,
-    offset: unit_info::StructOffset,
-    array: &'a unit_info::Array,
-    parent_name: String,
+    pub unit: &'a unit_info::UnitInfo,
+    pub info: &'a DebugInfo,
+    pub location: Option<unit_info::MemoryLocation>,
+    pub offset: unit_info::StructOffset,
+    pub array: &'a unit_info::Array,
+    pub parent_name: String,
 }
 
 impl<'a> DebugArray<'a> {
@@ -320,9 +333,9 @@ impl core::fmt::Debug for DebugArray<'_> {
 }
 
 pub struct DebugBaseType<'a> {
-    location: Option<unit_info::MemoryLocation>,
-    offset: unit_info::StructOffset,
-    base_type: &'a unit_info::BaseType,
+    pub location: Option<unit_info::MemoryLocation>,
+    pub offset: unit_info::StructOffset,
+    pub base_type: &'a unit_info::BaseType,
 }
 
 impl DebugBaseType<'_> {
@@ -385,7 +398,7 @@ impl core::fmt::Debug for DebugBaseType<'_> {
 
 pub struct DebugStructureMember<'a> {
     parent_name: String,
-    unit: &'a unit_info::UnitInfo,
+    pub unit: &'a unit_info::UnitInfo,
     info: &'a DebugInfo,
     location: Option<unit_info::MemoryLocation>,
     offset: unit_info::StructOffset,
@@ -550,6 +563,30 @@ impl core::fmt::Debug for DebugStructureMember<'_> {
         f.debug_struct("DebugStructureMember")
             .field("structure_member", &self.structure_member)
             .finish()
+    }
+}
+
+pub struct DebugGenericParameter<'a> {
+    info: &'a DebugInfo,
+    generic_parameter: &'a unit_info::GenericParameter,
+}
+
+impl<'a> DebugGenericParameter<'a> {
+    pub fn structure(&self) -> Result<unit_info::Structure, DebugTypeError> {
+        self.info
+            .structure_from_item(self.generic_parameter.kind())
+            .cloned()
+            .ok_or(DebugTypeError::StructureNotFound {
+                owner: self
+                    .generic_parameter
+                    .name()
+                    .unwrap_or_default()
+                    .to_string(),
+            })
+    }
+
+    pub fn generic_parameter(&self) -> &'a unit_info::GenericParameter {
+        self.generic_parameter
     }
 }
 
@@ -744,9 +781,10 @@ impl<'a> DebugSlice<'a> {
 }
 
 /// Wrap a Structure to include the unit that it came from
+#[derive(Clone)]
 pub struct DebugStructure<'a> {
-    unit: &'a unit_info::UnitInfo,
-    info: &'a DebugInfo,
+    pub unit: &'a unit_info::UnitInfo,
+    pub info: &'a DebugInfo,
     location: Option<unit_info::MemoryLocation>,
     offset: unit_info::StructOffset,
     structure: &'a unit_info::Structure,
@@ -785,6 +823,17 @@ impl<'a> DebugStructure<'a> {
             })
     }
 
+    pub fn generics(&self) -> Vec<DebugGenericParameter<'a>> {
+        self.structure
+            .generics()
+            .iter()
+            .map(|generic_parameter| DebugGenericParameter {
+                info: self.info,
+                generic_parameter,
+            })
+            .collect()
+    }
+
     /// Special case for Rust slices, which always have two members:
     /// a "data_ptr" and a "length".
     pub fn as_slice<S: Read + ?Sized>(
@@ -816,6 +865,10 @@ impl<'a> DebugStructure<'a> {
 
     pub fn location(&self) -> Option<unit_info::MemoryLocation> {
         self.location
+    }
+
+    pub fn structure(&self) -> &unit_info::Structure {
+        self.structure
     }
 }
 

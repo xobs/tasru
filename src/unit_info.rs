@@ -1,4 +1,4 @@
-use gimli::{DW_AT_name, Endianity, Reader};
+use gimli::{DW_AT_name, Endianity, Reader, UnitSectionOffset};
 use std::collections::HashMap;
 
 use crate::{GimliReader, split_namespace_and_name};
@@ -6,7 +6,7 @@ use crate::{GimliReader, split_namespace_and_name};
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 /// A location within the debug section
 pub struct DebugItem {
-    offset: u64,
+    pub offset: u64,
 }
 
 impl DebugItem {
@@ -110,7 +110,7 @@ impl core::fmt::Display for EntryIndex {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct StructureMember {
     name: Option<String>,
     kind: DebugItem,
@@ -131,7 +131,7 @@ impl StructureMember {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct GenericParameter {
     name: Option<String>,
     kind: DebugItem,
@@ -316,7 +316,7 @@ impl Enumeration {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 /// Represents either a struct or an enum.
 pub struct Structure {
     name: String,
@@ -487,6 +487,7 @@ pub struct SymbolCache {
 /// A struct containing information about a single compilation unit.
 pub struct UnitInfo {
     cache: SymbolCache,
+    pub offset: UnitSectionOffset,
 }
 
 impl UnitInfo {
@@ -872,7 +873,10 @@ impl UnitInfo {
             union_address,
         };
 
-        Some(Self { cache })
+        Some(Self {
+            cache,
+            offset: unit.header.offset(),
+        })
     }
 
     pub fn variable_from_name(&self, name: &str) -> Option<&Variable> {
