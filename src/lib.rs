@@ -414,11 +414,11 @@ impl DebugInfo {
                 continue;
             };
 
-            return Ok(DebugBaseType {
-                location: Some(MemoryLocation(address)),
-                offset: StructOffset(0),
+            return Ok(DebugBaseType::new(
+                Some(MemoryLocation(address)),
+                StructOffset(0),
                 base_type,
-            });
+            ));
         }
 
         Err(DebugTypeError::BaseTypeNotFound {
