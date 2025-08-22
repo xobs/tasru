@@ -72,7 +72,7 @@ pub struct DebugInfo {
 pub enum DebugInfoError {
     /// The .o file could not be parsed
     ObjectError(object::Error),
-    /// An error occured reading the file off disk
+    /// An error occurred reading the file off disk
     IoError(std::io::Error),
     /// An Elf format error occurred
     GimliError(gimli::Error),

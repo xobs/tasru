@@ -46,7 +46,7 @@ pub enum DebugTypeError {
         attempted: String,
         actual: String,
     },
-    NotRustSice(String),
+    NotRustSlice(String),
     ReadError,
     SizeError(u64),
     LocationMissing,
@@ -121,7 +121,7 @@ impl core::fmt::Display for DebugTypeError {
                     )
                 }
             }
-            DebugTypeError::NotRustSice(owner) => {
+            DebugTypeError::NotRustSlice(owner) => {
                 write!(f, "Type \"{}\" is not a Rust slice", owner)
             }
             DebugTypeError::ReadError => {
@@ -870,7 +870,7 @@ impl<'a> DebugStructure<'a> {
         memory_source: &mut S,
     ) -> Result<DebugSlice<'a>, DebugTypeError> {
         if self.structure.members().len() != 2 {
-            return Err(DebugTypeError::NotRustSice(self.structure.name().into()));
+            return Err(DebugTypeError::NotRustSlice(self.structure.name().into()));
         }
         let length = self
             .member_named("length")?

@@ -396,7 +396,7 @@ struct PartialArray {
     kind: DebugItem,
 }
 
-/// A tagthat describes the contents of the array
+/// A tag that describes the contents of the array
 struct Subrange {
     lower_bound: u64,
     count: usize,
