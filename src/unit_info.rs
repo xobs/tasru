@@ -320,6 +320,7 @@ impl Enumeration {
 /// Represents either a struct or an enum.
 pub struct Structure {
     name: String,
+    kind: DebugItem,
     members: Vec<StructureMember>,
     generics: Vec<GenericParameter>,
     size: u64,
@@ -334,6 +335,10 @@ impl Structure {
 
     pub fn namespace(&self) -> &str {
         &self.namespace
+    }
+
+    pub fn kind(&self) -> DebugItem {
+        self.kind
     }
 
     pub fn members(&self) -> &[StructureMember] {
@@ -731,12 +736,12 @@ impl UnitInfo {
                 }
 
                 gimli::constants::DW_TAG_structure_type => {
-                    let Some(structure) =
-                        parse_structure(abbrev.attrs(), &parent_namespace, unit_ref)
+                    let Some(offset) = DebugItem::from_unit_offset(abbrev.offset(), unit_ref)
                     else {
                         continue;
                     };
-                    let Some(offset) = DebugItem::from_unit_offset(abbrev.offset(), unit_ref)
+                    let Some(structure) =
+                        parse_structure(abbrev.attrs(), &parent_namespace, unit_ref, offset)
                     else {
                         continue;
                     };
@@ -1213,6 +1218,7 @@ fn parse_structure<ENDIAN: Endianity>(
     mut attrs: gimli::AttrsIter<GimliReader<ENDIAN>>,
     namespace: &[String],
     unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
+    offset: DebugItem,
 ) -> Option<Structure> {
     let mut name = None;
     let mut size = None;
@@ -1254,6 +1260,7 @@ fn parse_structure<ENDIAN: Endianity>(
 
             return Some(Structure {
                 members: vec![],
+                kind: offset,
                 generics: vec![],
                 name: name.into(),
                 namespace,

@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+use gimli::DebugInfoOffset;
+
 use crate::{
     DebugInfo,
     memory::Read,
@@ -254,12 +256,12 @@ impl<'a> Iterator for DebugArrayIterator<'a> {
 /// An array of values in memory. The size of the array is taken from the Dwarf data and
 /// is fixed at compile time.
 pub struct DebugArray<'a> {
-    pub unit: &'a unit_info::UnitInfo,
-    pub info: &'a DebugInfo,
-    pub location: Option<unit_info::MemoryLocation>,
-    pub offset: unit_info::StructOffset,
-    pub array: &'a unit_info::Array,
-    pub parent_name: String,
+    unit: &'a unit_info::UnitInfo,
+    info: &'a DebugInfo,
+    location: Option<unit_info::MemoryLocation>,
+    offset: unit_info::StructOffset,
+    array: &'a unit_info::Array,
+    parent_name: String,
 }
 
 impl<'a> DebugArray<'a> {
@@ -333,12 +335,24 @@ impl core::fmt::Debug for DebugArray<'_> {
 }
 
 pub struct DebugBaseType<'a> {
-    pub location: Option<unit_info::MemoryLocation>,
-    pub offset: unit_info::StructOffset,
-    pub base_type: &'a unit_info::BaseType,
+    location: Option<unit_info::MemoryLocation>,
+    offset: unit_info::StructOffset,
+    base_type: &'a unit_info::BaseType,
 }
 
-impl DebugBaseType<'_> {
+impl<'a> DebugBaseType<'a> {
+    pub(crate) fn new(
+        location: Option<unit_info::MemoryLocation>,
+        offset: unit_info::StructOffset,
+        base_type: &'a unit_info::BaseType,
+    ) -> Self {
+        Self {
+            location,
+            offset,
+            base_type,
+        }
+    }
+
     pub fn name(&self) -> &str {
         self.base_type.name()
     }
@@ -398,7 +412,7 @@ impl core::fmt::Debug for DebugBaseType<'_> {
 
 pub struct DebugStructureMember<'a> {
     parent_name: String,
-    pub unit: &'a unit_info::UnitInfo,
+    unit: &'a unit_info::UnitInfo,
     info: &'a DebugInfo,
     location: Option<unit_info::MemoryLocation>,
     offset: unit_info::StructOffset,
@@ -783,7 +797,7 @@ impl<'a> DebugSlice<'a> {
 /// Wrap a Structure to include the unit that it came from
 #[derive(Clone)]
 pub struct DebugStructure<'a> {
-    pub unit: &'a unit_info::UnitInfo,
+    unit: &'a unit_info::UnitInfo,
     pub info: &'a DebugInfo,
     location: Option<unit_info::MemoryLocation>,
     offset: unit_info::StructOffset,
@@ -821,6 +835,21 @@ impl<'a> DebugStructure<'a> {
                 owner: self.structure.name().into(),
                 member: name.into(),
             })
+    }
+
+    pub fn members(&self) -> Vec<DebugStructureMember<'a>> {
+        self.structure
+            .members()
+            .iter()
+            .map(|structure_member| DebugStructureMember {
+                unit: self.unit,
+                info: self.info,
+                location: self.location,
+                offset: self.offset + structure_member.offset(),
+                parent_name: self.structure.name().into(),
+                structure_member,
+            })
+            .collect()
     }
 
     pub fn generics(&self) -> Vec<DebugGenericParameter<'a>> {
@@ -869,6 +898,10 @@ impl<'a> DebugStructure<'a> {
 
     pub fn structure(&self) -> &unit_info::Structure {
         self.structure
+    }
+
+    pub fn header_offset(&self) -> Option<DebugInfoOffset> {
+        self.unit.offset.as_debug_info_offset()
     }
 }
 
