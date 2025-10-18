@@ -462,10 +462,10 @@ pub struct SymbolCache {
     unions: Vec<Union>,
 
     /// Pointers to variables by the variable's exported name
-    variable_names: HashMap<String, EntryIndex>,
+    variable_names: HashMap<String, Vec<EntryIndex>>,
 
     /// Pointers to variables by the variable's demangled exported name
-    demangled_variable_names: HashMap<String, EntryIndex>,
+    demangled_variable_names: HashMap<String, Vec<EntryIndex>>,
 
     /// Pointers from the variable's address to the variable
     variable_address: HashMap<DebugItem, EntryIndex>,
@@ -522,8 +522,8 @@ impl UnitInfo {
         let mut pointers = vec![];
         let mut base_types = vec![];
         let mut unions: Vec<Union> = vec![];
-        let mut variable_names = HashMap::new();
-        let mut demangled_variable_names = HashMap::new();
+        let mut variable_names: HashMap<String, Vec<EntryIndex>> = HashMap::new();
+        let mut demangled_variable_names: HashMap<String, Vec<EntryIndex>> = HashMap::new();
 
         let mut variable_address = HashMap::new();
         let mut structure_address = HashMap::new();
@@ -591,47 +591,42 @@ impl UnitInfo {
                     // name may be demangled or not, and may be different from the variable name.
                     // Generally, the linkage name is the one used.
                     if let Some(linkage_name) = &variable.linkage_name {
-                        log::trace!("Adding variable {} to unit", linkage_name);
-                        assert!(
-                            variable_names
-                                .insert(linkage_name.clone(), EntryIndex(variables.len()))
-                                .is_none()
-                        );
+                        log::trace!("Adding variable {linkage_name} to unit");
+                        variable_names
+                            .entry(linkage_name.clone())
+                            .or_default()
+                            .push(EntryIndex(variables.len()));
                         let demangled_linkage_name =
                             format!("{:#}", rustc_demangle::demangle(linkage_name));
                         if demangled_linkage_name != demangled_name {
                             log::trace!(
-                                "Adding demangled variable {} to unit",
-                                demangled_linkage_name
+                                "Adding demangled variable {demangled_linkage_name} to unit"
                             );
-                            assert!(
-                                demangled_variable_names
-                                    .insert(demangled_linkage_name, EntryIndex(variables.len()))
-                                    .is_none()
-                            );
+                            demangled_variable_names
+                                .entry(demangled_linkage_name)
+                                .or_default()
+                                .push(EntryIndex(variables.len()))
                         }
 
                         // Add the ordinary variable name if it's different from the linkage name.
-                        if Some(&variable.name) != variable.linkage_name.as_ref() {
-                            assert!(
-                                variable_names
-                                    .insert(variable.name.clone(), EntryIndex(variables.len()))
-                                    .is_none(),
-                                "Variable name {} (linkage name {:?}) @ {:08x?} was found twice!",
-                                variable.name,
-                                variable.linkage_name,
-                                variable.location
+                        if variable.name != *linkage_name {
+                            log::trace!(
+                                "Adding variable name {} as well, since it's not equal to {linkage_name}",
+                                variable.name
                             );
+                            variable_names
+                                .entry(variable.name.clone())
+                                .or_default()
+                                .push(EntryIndex(variables.len()));
 
                             // It may be that the linkage name, when demangled, is the same as the
                             // variable name. This is because we add the namespace information to
                             // disambiguate variables with the same name in different namespaces.
                             // Ignore duplicates where the address is the same.
-                            assert!(
-                                demangled_variable_names
-                                    .insert(demangled_name, EntryIndex(variables.len()))
-                                    .is_none()
-                            );
+                            demangled_variable_names
+                                .entry(demangled_name)
+                                .or_default()
+                                .push(EntryIndex(variables.len()));
                         }
                     }
                     assert!(
@@ -884,18 +879,50 @@ impl UnitInfo {
         })
     }
 
+    /// Return the first variable that matches the specified name
     pub fn variable_from_name(&self, name: &str) -> Option<&Variable> {
         self.cache
             .variable_names
             .get(name)
+            .and_then(|entries| entries.first())
             .and_then(|addr| self.cache.variables.get(addr.0))
     }
 
+    /// Return the first variable that matches the specified demangled name
     pub fn variable_from_demangled_name(&self, name: &str) -> Option<&Variable> {
         self.cache
             .demangled_variable_names
             .get(name)
+            .and_then(|entries| entries.first())
             .and_then(|addr| self.cache.variables.get(addr.0))
+    }
+
+    /// Return all variables that matches the specified name
+    pub fn variables_from_name(&self, name: &str) -> Vec<&Variable> {
+        let mut results = vec![];
+        let Some(entries) = self.cache.variable_names.get(name) else {
+            return results;
+        };
+        for addr in entries {
+            if let Some(entry) = self.cache.variables.get(addr.0) {
+                results.push(entry);
+            }
+        }
+        results
+    }
+
+    /// Return the first variable that matches the specified demangled name
+    pub fn variables_from_demangled_name(&self, name: &str) -> Vec<&Variable> {
+        let mut results = vec![];
+        let Some(entries) = self.cache.demangled_variable_names.get(name) else {
+            return results;
+        };
+        for addr in entries {
+            if let Some(entry) = self.cache.variables.get(addr.0) {
+                results.push(entry);
+            }
+        }
+        results
     }
 
     pub fn variable_from_item(&self, location: DebugItem) -> Option<&Variable> {

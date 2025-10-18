@@ -206,23 +206,49 @@ impl DebugInfo {
         &self,
         path: &str,
     ) -> Result<DebugVariable<'_>, DebugTypeError> {
+        let mut results = self.variables_from_demangled_name(path);
+        match results.len() {
+            0 => Err(DebugTypeError::VariableNotFound(path.into())),
+            1 => Ok(results.pop().unwrap()),
+            _ => Err(DebugTypeError::MultipleMatches),
+        }
+    }
+
+    /// Consult all units to look for all variants with the specified name. If the variable
+    /// cannot be found, return an error. Note that only rustc name mangling is supported.
+    pub fn variables_from_demangled_name(&self, path: &str) -> Vec<DebugVariable<'_>> {
+        let mut results = vec![];
         for unit in &self.units {
-            if let Some(variable) = unit.variable_from_demangled_name(path) {
-                return Ok(DebugVariable::new(unit, self, variable));
+            let variables = unit.variables_from_demangled_name(path);
+            for variable in variables {
+                results.push(DebugVariable::new(unit, self, variable));
             }
         }
-        Err(DebugTypeError::VariableNotFound(path.into()))
+        results
     }
 
     /// Consult all units to look for a variant with the specified name. If the variable
     /// cannot be found, return an error. The variable name will not be demangled.
     pub fn variable_from_name(&self, path: &str) -> Result<DebugVariable<'_>, DebugTypeError> {
+        let mut results = self.variables_from_name(path);
+        match results.len() {
+            0 => Err(DebugTypeError::VariableNotFound(path.into())),
+            1 => Ok(results.pop().unwrap()),
+            _ => Err(DebugTypeError::MultipleMatches),
+        }
+    }
+
+    /// Consult all units to look for all variants with the specified name. If the variable
+    /// cannot be found, return an error. Note that only rustc name mangling is supported.
+    pub fn variables_from_name(&self, path: &str) -> Vec<DebugVariable<'_>> {
+        let mut results = vec![];
         for unit in &self.units {
-            if let Some(variable) = unit.variable_from_name(path) {
-                return Ok(DebugVariable::new(unit, self, variable));
+            let variables = unit.variables_from_name(path);
+            for variable in variables {
+                results.push(DebugVariable::new(unit, self, variable));
             }
         }
-        Err(DebugTypeError::VariableNotFound(path.into()))
+        results
     }
 
     pub fn find_variable<P>(&self, predicate: P) -> Result<DebugVariable<'_>, DebugTypeError>
