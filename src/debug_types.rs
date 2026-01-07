@@ -191,14 +191,10 @@ impl<'a> DebugArrayItem<'a> {
             })
     }
 
-    pub fn base_type(&self) -> Result<DebugBaseType<'a>, DebugTypeError> {
+    pub fn base_type(&self) -> Result<DebugBaseType, DebugTypeError> {
         self.info
             .base_type_from_item(self.kind)
-            .map(|base_type| DebugBaseType {
-                location: self.location,
-                offset: self.offset,
-                base_type,
-            })
+            .map(|base_type| DebugBaseType::new(self.location, base_type))
             .ok_or_else(|| DebugTypeError::BaseTypeNotFound {
                 owner: self.parent_name.clone(),
             })
@@ -334,31 +330,32 @@ impl core::fmt::Debug for DebugArray<'_> {
     }
 }
 
-pub struct DebugBaseType<'a> {
+pub struct DebugBaseType {
     location: Option<unit_info::MemoryLocation>,
-    offset: unit_info::StructOffset,
-    base_type: &'a unit_info::BaseType,
+    size: u64,
+    name: String,
 }
 
-impl<'a> DebugBaseType<'a> {
+impl DebugBaseType {
     pub(crate) fn new(
         location: Option<unit_info::MemoryLocation>,
-        offset: unit_info::StructOffset,
-        base_type: &'a unit_info::BaseType,
+        base_type: &unit_info::BaseType,
     ) -> Self {
+        let size = base_type.size();
+        let name = base_type.name().to_owned();
         Self {
             location,
-            offset,
-            base_type,
+            size,
+            name,
         }
     }
 
     pub fn name(&self) -> &str {
-        self.base_type.name()
+        &self.name
     }
 
     pub fn size(&self) -> u64 {
-        self.base_type.size()
+        self.size
     }
 
     pub fn as_u8<S: Read + ?Sized>(&self, memory_source: &mut S) -> Option<u8> {
@@ -400,12 +397,10 @@ impl<'a> DebugBaseType<'a> {
     }
 }
 
-impl core::fmt::Debug for DebugBaseType<'_> {
+impl core::fmt::Debug for DebugBaseType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DebugBaseType")
             .field("location", &self.location)
-            .field("offset", &self.offset)
-            .field("base_type", &self.base_type)
             .finish()
     }
 }
@@ -541,13 +536,14 @@ impl<'a> DebugStructureMember<'a> {
             .ok_or_else(|| self.find_alternatives("union"))
     }
 
-    pub fn base_type(&self) -> Result<DebugBaseType<'a>, DebugTypeError> {
+    pub fn base_type(&self) -> Result<DebugBaseType, DebugTypeError> {
         self.info
             .base_type_from_item(self.structure_member.kind())
-            .map(|base_type| DebugBaseType {
-                location: self.location.map(|l| l + self.structure_member.offset()),
-                offset: self.offset + self.structure_member.offset(),
-                base_type,
+            .map(|base_type| {
+                DebugBaseType::new(
+                    self.location.map(|l| l + self.structure_member.offset()),
+                    base_type,
+                )
             })
             .ok_or_else(|| self.find_alternatives("base type"))
     }
@@ -658,7 +654,6 @@ impl core::fmt::Debug for DebugUnion<'_> {
 }
 pub struct DebugSliceBaseTypeIter<'a> {
     location: Option<unit_info::MemoryLocation>,
-    offset: unit_info::StructOffset,
     length: u64,
     current: u64,
     size: unit_info::StructOffset,
@@ -675,18 +670,17 @@ impl DebugSliceBaseTypeIter<'_> {
 }
 
 impl<'a> Iterator for DebugSliceBaseTypeIter<'a> {
-    type Item = DebugBaseType<'a>;
+    type Item = DebugBaseType;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current >= self.length {
             return None;
         }
         let current = unit_info::StructOffset::new(self.current);
-        let new = DebugBaseType {
-            location: self.location.map(|l| l + self.size * current),
-            offset: self.offset + self.size * current,
-            base_type: self.base_type,
-        };
+        let new = DebugBaseType::new(
+            self.location.map(|l| l + self.size * current),
+            self.base_type,
+        );
         self.current += 1;
         Some(new)
     }
@@ -758,7 +752,6 @@ impl<'a> DebugSlice<'a> {
         };
         Ok(DebugSliceBaseTypeIter {
             location: self.location,
-            offset: self.offset,
             length: self.length,
             current: 0,
             size: element_size,

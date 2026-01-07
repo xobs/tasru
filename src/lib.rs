@@ -51,7 +51,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use debug_types::{DebugBaseType, DebugTypeError, DebugVariable};
-use unit_info::{MemoryLocation, StructOffset, UnitInfo, Variable};
+use unit_info::{MemoryLocation, UnitInfo, Variable};
 
 use crate::debug_types::{DebugEnumeration, DebugStructure, DebugUnion};
 
@@ -427,7 +427,7 @@ impl DebugInfo {
         &self,
         target_item: &unit_info::DebugItem,
         address: u64,
-    ) -> Result<DebugBaseType<'_>, DebugTypeError> {
+    ) -> Result<DebugBaseType, DebugTypeError> {
         for (item, index) in &self.symbol_unit_mapping {
             if target_item != item {
                 continue;
@@ -440,11 +440,7 @@ impl DebugInfo {
                 continue;
             };
 
-            return Ok(DebugBaseType::new(
-                Some(MemoryLocation(address)),
-                StructOffset(0),
-                base_type,
-            ));
+            return Ok(DebugBaseType::new(Some(MemoryLocation(address)), base_type));
         }
 
         Err(DebugTypeError::BaseTypeNotFound {
