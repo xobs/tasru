@@ -114,10 +114,11 @@ impl std::error::Error for DebugInfoError {}
 pub(crate) fn split_namespace_and_name(kind: &str) -> (&str, &str) {
     // If the kind is a reference, mut reference, or anything else that's not a normal struct, do
     // not attempt to split out the namespace.
-    if let Some(first_char) = kind.chars().next() {
-        if !first_char.is_ascii_alphabetic() && first_char != '_' {
-            return ("", kind);
-        }
+    if let Some(first_char) = kind.chars().next()
+        && !first_char.is_ascii_alphabetic()
+        && first_char != '_'
+    {
+        return ("", kind);
     }
 
     if kind.starts_with("dyn ") {

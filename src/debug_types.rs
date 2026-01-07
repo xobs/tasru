@@ -203,12 +203,11 @@ impl<'a> DebugArrayItem<'a> {
     /// Treat the Array as a `u8`. This can be useful for reading strings, which are
     /// generally stored as arrays of u8 values.
     pub fn u8<S: Read + ?Sized>(&self, memory_source: &mut S) -> Option<u8> {
-        if let Some(location) = self.location {
-            if let Some(base_type) = self.info.base_type_from_item(self.kind) {
-                if base_type.size() == 1 {
-                    return memory_source.read_u8(location.0).ok();
-                }
-            }
+        if let Some(location) = self.location
+            && let Some(base_type) = self.info.base_type_from_item(self.kind)
+            && base_type.size() == 1
+        {
+            return memory_source.read_u8(location.0).ok();
         }
         None
     }

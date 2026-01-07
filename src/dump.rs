@@ -26,10 +26,11 @@ fn dump_file_index<ENDIAN: Endianity>(
     if let Some(directory) = file.directory(header) {
         let directory = unit.attr_string(directory)?;
         let directory = directory.to_string_lossy()?;
-        if file.directory_index() != 0 && !directory.starts_with('/') {
-            if let Some(ref comp_dir) = unit.comp_dir {
-                print!("{}/", comp_dir.to_string_lossy()?,);
-            }
+        if file.directory_index() != 0
+            && !directory.starts_with('/')
+            && let Some(ref comp_dir) = unit.comp_dir
+        {
+            print!("{}/", comp_dir.to_string_lossy()?,);
         }
         print!("{}/", directory);
     }

@@ -691,10 +691,10 @@ impl UnitInfo {
                 gimli::constants::DW_TAG_member
                     if parent_tag == gimli::constants::DW_TAG_variant =>
                 {
-                    if let Some(last_enum) = enumerations.last_mut() {
-                        if let Some(last_variant) = last_enum.variants.last_mut() {
-                            update_enum_variant_member(abbrev.attrs(), last_variant, unit_ref);
-                        }
+                    if let Some(last_enum) = enumerations.last_mut()
+                        && let Some(last_variant) = last_enum.variants.last_mut()
+                    {
+                        update_enum_variant_member(abbrev.attrs(), last_variant, unit_ref);
                     }
                 }
 
@@ -702,20 +702,20 @@ impl UnitInfo {
                 gimli::constants::DW_TAG_member
                     if parent_tag == gimli::constants::DW_TAG_structure_type =>
                 {
-                    if let Some(member) = parse_structure_member(abbrev.attrs(), unit_ref) {
-                        if let Some(last) = structures.last_mut() {
-                            last.members.push(member);
-                        }
+                    if let Some(member) = parse_structure_member(abbrev.attrs(), unit_ref)
+                        && let Some(last) = structures.last_mut()
+                    {
+                        last.members.push(member);
                     }
                 }
 
                 gimli::constants::DW_TAG_template_type_parameter
                     if parent_tag == gimli::constants::DW_TAG_structure_type =>
                 {
-                    if let Some(generic) = parse_generic_parameter(abbrev.attrs(), unit_ref) {
-                        if let Some(last) = structures.last_mut() {
-                            last.generics.push(generic);
-                        }
+                    if let Some(generic) = parse_generic_parameter(abbrev.attrs(), unit_ref)
+                        && let Some(last) = structures.last_mut()
+                    {
+                        last.generics.push(generic);
                     }
                 }
 
@@ -723,10 +723,10 @@ impl UnitInfo {
                 gimli::constants::DW_TAG_member
                     if parent_tag == gimli::constants::DW_TAG_union_type =>
                 {
-                    if let Some(member) = parse_structure_member(abbrev.attrs(), unit_ref) {
-                        if let Some(last) = unions.last_mut() {
-                            last.members.push(member);
-                        }
+                    if let Some(member) = parse_structure_member(abbrev.attrs(), unit_ref)
+                        && let Some(last) = unions.last_mut()
+                    {
+                        last.members.push(member);
                     }
                 }
 
@@ -1174,11 +1174,12 @@ fn parse_filename<ENDIAN: Endianity>(
     if let Some(directory) = file.directory(header) {
         let directory = unit_ref.attr_string(directory).ok()?;
         let directory = directory.to_string_lossy().ok()?;
-        if file.directory_index() != 0 && !directory.starts_with('/') {
-            if let Some(ref comp_dir) = unit.comp_dir {
-                file_name.push_str(&format!("{}/", comp_dir.to_string_lossy().ok()?));
-                // print!("{}/", comp_dir.to_string_lossy()?,);
-            }
+        if file.directory_index() != 0
+            && !directory.starts_with('/')
+            && let Some(ref comp_dir) = unit.comp_dir
+        {
+            file_name.push_str(&format!("{}/", comp_dir.to_string_lossy().ok()?));
+            // print!("{}/", comp_dir.to_string_lossy()?,);
         }
         file_name.push_str(&format!("{}/", directory));
     }
@@ -1224,18 +1225,18 @@ fn parse_variable<ENDIAN: Endianity>(
     if let Some(mut name) = name {
         let namespace = parents.join("::");
         name = format!("{namespace}::{name}");
-        if let Some(kind) = kind {
-            if let Some(location) = location {
-                return Some(Variable {
-                    name,
-                    namespace,
-                    kind,
-                    location,
-                    linkage_name,
-                    line,
-                    file,
-                });
-            }
+        if let Some(kind) = kind
+            && let Some(location) = location
+        {
+            return Some(Variable {
+                name,
+                namespace,
+                kind,
+                location,
+                linkage_name,
+                line,
+                file,
+            });
         }
     }
     None
@@ -1269,32 +1270,32 @@ fn parse_structure<ENDIAN: Endianity>(
             }
         }
     }
-    if let Some(name) = name {
-        if let Some(size) = size {
-            // The namespace may be included in name and not through the DW_AT_namespace tag.
-            // Attempt to decode the namespace in the name.
-            let (decoded_namespace, name) = split_namespace_and_name(&name);
+    if let Some(name) = name
+        && let Some(size) = size
+    {
+        // The namespace may be included in name and not through the DW_AT_namespace tag.
+        // Attempt to decode the namespace in the name.
+        let (decoded_namespace, name) = split_namespace_and_name(&name);
 
-            let namespace = if decoded_namespace.is_empty() {
-                namespace.join("::")
-            } else {
-                let decoded_namespace: Vec<String> =
-                    decoded_namespace.split("::").map(str::to_string).collect();
-                let mut namespace = namespace.to_vec();
-                namespace.extend(decoded_namespace);
-                namespace.join("::")
-            };
+        let namespace = if decoded_namespace.is_empty() {
+            namespace.join("::")
+        } else {
+            let decoded_namespace: Vec<String> =
+                decoded_namespace.split("::").map(str::to_string).collect();
+            let mut namespace = namespace.to_vec();
+            namespace.extend(decoded_namespace);
+            namespace.join("::")
+        };
 
-            return Some(Structure {
-                members: vec![],
-                kind: offset,
-                generics: vec![],
-                name: name.into(),
-                namespace,
-                size,
-                containing_type,
-            });
-        }
+        return Some(Structure {
+            members: vec![],
+            kind: offset,
+            generics: vec![],
+            name: name.into(),
+            namespace,
+            size,
+            containing_type,
+        });
     }
     None
 }
@@ -1325,29 +1326,29 @@ fn parse_union<ENDIAN: Endianity>(
             }
         }
     }
-    if let Some(name) = name {
-        if let Some(size) = size {
-            // The namespace may be included in name and not through the DW_AT_namespace tag.
-            // Attempt to decode the namespace in the name.
-            let (decoded_namespace, name) = split_namespace_and_name(&name);
+    if let Some(name) = name
+        && let Some(size) = size
+    {
+        // The namespace may be included in name and not through the DW_AT_namespace tag.
+        // Attempt to decode the namespace in the name.
+        let (decoded_namespace, name) = split_namespace_and_name(&name);
 
-            let namespace = if decoded_namespace.is_empty() {
-                namespace.join("::")
-            } else {
-                let decoded_namespace: Vec<String> =
-                    decoded_namespace.split("::").map(str::to_string).collect();
-                let mut namespace = namespace.to_vec();
-                namespace.extend(decoded_namespace);
-                namespace.join("::")
-            };
+        let namespace = if decoded_namespace.is_empty() {
+            namespace.join("::")
+        } else {
+            let decoded_namespace: Vec<String> =
+                decoded_namespace.split("::").map(str::to_string).collect();
+            let mut namespace = namespace.to_vec();
+            namespace.extend(decoded_namespace);
+            namespace.join("::")
+        };
 
-            return Some(Union {
-                members: vec![],
-                name: name.into(),
-                namespace,
-                size,
-            });
-        }
+        return Some(Union {
+            members: vec![],
+            name: name.into(),
+            namespace,
+            size,
+        });
     }
     None
 }
@@ -1543,10 +1544,10 @@ fn parse_subrange<ENDIAN: Endianity>(
             }
         }
     }
-    if let Some(lower_bound) = lower_bound {
-        if let Some(count) = count {
-            return Some(Subrange { lower_bound, count });
-        }
+    if let Some(lower_bound) = lower_bound
+        && let Some(count) = count
+    {
+        return Some(Subrange { lower_bound, count });
     }
     None
 }
@@ -1598,14 +1599,14 @@ fn parse_base_type<ENDIAN: Endianity>(
             }
         }
     }
-    if let Some(name) = name {
-        if let Some(size) = size {
-            return Some(BaseType {
-                name,
-                namespace: namespace.join("::"),
-                size,
-            });
-        }
+    if let Some(name) = name
+        && let Some(size) = size
+    {
+        return Some(BaseType {
+            name,
+            namespace: namespace.join("::"),
+            size,
+        });
     }
     None
 }
