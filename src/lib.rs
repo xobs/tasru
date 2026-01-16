@@ -441,7 +441,10 @@ impl DebugInfo {
                 continue;
             };
 
-            return Ok(DebugBaseType::new(Some(MemoryLocation(address)), base_type));
+            return Ok(DebugBaseType::from_base_type(
+                Some(MemoryLocation(address)),
+                base_type,
+            ));
         }
 
         Err(DebugTypeError::BaseTypeNotFound {

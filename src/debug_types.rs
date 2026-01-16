@@ -194,7 +194,7 @@ impl<'a> DebugArrayItem<'a> {
     pub fn base_type(&self) -> Result<DebugBaseType, DebugTypeError> {
         self.info
             .base_type_from_item(self.kind)
-            .map(|base_type| DebugBaseType::new(self.location, base_type))
+            .map(|base_type| DebugBaseType::from_base_type(self.location, base_type))
             .ok_or_else(|| DebugTypeError::BaseTypeNotFound {
                 owner: self.parent_name.clone(),
             })
@@ -336,7 +336,15 @@ pub struct DebugBaseType {
 }
 
 impl DebugBaseType {
-    pub(crate) fn new(
+    pub fn new(location: Option<unit_info::MemoryLocation>, name: String, size: u64) -> Self {
+        Self {
+            location,
+            size,
+            name,
+        }
+    }
+
+    pub(crate) fn from_base_type(
         location: Option<unit_info::MemoryLocation>,
         base_type: &unit_info::BaseType,
     ) -> Self {
@@ -539,7 +547,7 @@ impl<'a> DebugStructureMember<'a> {
         self.info
             .base_type_from_item(self.structure_member.kind())
             .map(|base_type| {
-                DebugBaseType::new(
+                DebugBaseType::from_base_type(
                     self.location.map(|l| l + self.structure_member.offset()),
                     base_type,
                 )
@@ -676,7 +684,7 @@ impl<'a> Iterator for DebugSliceBaseTypeIter<'a> {
             return None;
         }
         let current = unit_info::StructOffset::new(self.current);
-        let new = DebugBaseType::new(
+        let new = DebugBaseType::from_base_type(
             self.location.map(|l| l + self.size * current),
             self.base_type,
         );
