@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use gimli::DebugInfoOffset;
+use gimli::{DebugInfoOffset, SectionId};
 
 use crate::{
     DebugInfo,
@@ -901,7 +901,11 @@ impl<'a> DebugStructure<'a> {
     }
 
     pub fn header_offset(&self) -> Option<DebugInfoOffset> {
-        self.unit.offset.as_debug_info_offset()
+        if self.unit.section == SectionId::DebugInfo {
+            Some(DebugInfoOffset(self.unit.offset.0))
+        } else {
+            None
+        }
     }
 }
 

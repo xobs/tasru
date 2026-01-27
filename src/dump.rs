@@ -200,6 +200,9 @@ fn dump_op<ENDIAN: Endianity>(
                 print!(" 0x{:08x}", offset);
             }
         },
+        gimli::Operation::VariableValue { offset } => {
+            print!(" 0x{:08x}", offset.0);
+        }
         gimli::Operation::Piece {
             size_in_bits,
             bit_offset: None,
@@ -288,7 +291,8 @@ fn dump_op<ENDIAN: Endianity>(
         | gimli::Operation::PushObjectAddress
         | gimli::Operation::TLS
         | gimli::Operation::CallFrameCFA
-        | gimli::Operation::StackValue => {}
+        | gimli::Operation::StackValue
+        | gimli::Operation::Uninitialized => {}
     };
     Ok(())
 }
@@ -452,7 +456,8 @@ pub fn attribute<ENDIAN: Endianity>(
         gimli::AttributeValue::Data1(_)
         | gimli::AttributeValue::Data2(_)
         | gimli::AttributeValue::Data4(_)
-        | gimli::AttributeValue::Data8(_) => {
+        | gimli::AttributeValue::Data8(_)
+        | gimli::AttributeValue::Data16(_) => {
             if let (Some(udata), Some(sdata)) = (attr.udata_value(), attr.sdata_value()) {
                 if sdata >= 0 {
                     println!("{}", udata);
@@ -532,16 +537,12 @@ pub fn attribute<ENDIAN: Endianity>(
             println!("{:#x}", address);
         }
         gimli::AttributeValue::UnitRef(offset) => {
-            print!("0x{:08x}", offset.0);
-            match offset.to_unit_section_offset(&unit) {
-                UnitSectionOffset::DebugInfoOffset(goff) => {
-                    print!("<.debug_info+0x{:08x}>", goff.0);
-                }
-                UnitSectionOffset::DebugTypesOffset(goff) => {
-                    print!("<.debug_types+0x{:08x}>", goff.0);
-                }
-            }
-            println!();
+            println!(
+                "0x{:08x}<{}+0x{:08x}>",
+                offset.0,
+                unit.section().name(),
+                offset.to_unit_section_offset(&unit).0,
+            );
         }
         gimli::AttributeValue::DebugInfoRef(offset) => {
             println!("<.debug_info+0x{:08x}>", offset.0);
