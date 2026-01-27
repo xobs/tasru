@@ -543,7 +543,7 @@ impl UnitInfo {
         let mut entries = unit_ref.entries();
         let mut depth = 0usize;
         while let Ok(Some(abbrev)) = entries.next_dfs() {
-            let depth_delta = (depth as isize) - abbrev.depth;
+            let depth_delta = abbrev.depth - (depth as isize);
             if depth_delta < 0 {
                 if depth_delta.unsigned_abs() > depth {
                     panic!(
