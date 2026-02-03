@@ -68,7 +68,7 @@ impl From<MemoryLocation> for u64 {
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 /// An offset from the start of the struct
-pub struct StructOffset(pub(crate) u64);
+pub struct StructOffset(pub u64);
 impl StructOffset {
     pub fn new(offset: u64) -> Self {
         StructOffset(offset)
