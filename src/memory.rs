@@ -139,6 +139,15 @@ pub trait Write {
     fn finish(&mut self) {}
 }
 
-pub trait ReadWrite: Read + Write {
-    type Error: core::error::Error;
+pub trait ReadWrite<E>: Read<Error = E> + Write<Error = E>
+where
+    E: core::error::Error,
+{
+}
+
+impl<T, E> ReadWrite<E> for T
+where
+    E: core::error::Error,
+    T: Read<Error = E> + Write<Error = E>,
+{
 }
