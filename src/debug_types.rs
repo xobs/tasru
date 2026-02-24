@@ -402,6 +402,12 @@ impl DebugBaseType {
             _ => return None,
         })
     }
+
+    pub fn location(&self) -> Result<u64, DebugTypeError> {
+        self.location
+            .ok_or(DebugTypeError::LocationMissing)
+            .map(|location| location.0)
+    }
 }
 
 impl core::fmt::Debug for DebugBaseType {
@@ -563,7 +569,7 @@ impl<'a> DebugStructureMember<'a> {
     pub fn location(&self) -> Result<u64, DebugTypeError> {
         self.location
             .ok_or(DebugTypeError::LocationMissing)
-            .map(|location| location.0)
+            .map(|location| (location + self.structure_member.offset()).0)
     }
 }
 
