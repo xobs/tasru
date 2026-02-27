@@ -665,6 +665,37 @@ impl UnitInfo {
                     });
                 }
 
+                // Enum
+                gimli::constants::DW_TAG_enumeration_type => {
+                    let Some(offset) = DebugItem::from_unit_offset(abbrev.offset(), unit_ref)
+                    else {
+                        continue;
+                    };
+                    let Some(enumeration) =
+                        parse_enumeration_type(abbrev.attrs(), &parent_namespace, unit_ref)
+                    else {
+                        continue;
+                    };
+
+                    enumeration_address.insert(offset, EntryIndex(enumerations.len()));
+                    enumerations.push(enumeration);
+                }
+
+                // Enum discriminant
+                gimli::constants::DW_TAG_enumerator
+                    if parent_tag == gimli::constants::DW_TAG_enumeration_type =>
+                {
+                    let Some(last_enum) = enumerations.last_mut() else {
+                        continue;
+                    };
+                    let Some(variant) =
+                        parse_enumerator(abbrev.attrs(), last_enum.discriminant_kind, unit_ref)
+                    else {
+                        continue;
+                    };
+                    last_enum.variants.push(variant);
+                }
+
                 // Enum discriminant specification
                 gimli::constants::DW_TAG_member
                     if parent_tag == gimli::constants::DW_TAG_variant_part =>
@@ -1421,6 +1452,42 @@ fn parse_generic_parameter<ENDIAN: Endianity>(
     None
 }
 
+fn parse_enumerator<ENDIAN: Endianity>(
+    attrs: &[gimli::Attribute<GimliReader<ENDIAN>>],
+    discriminant_kind: DebugItem,
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
+) -> Option<EnumerationVariant> {
+    let mut discriminant = None;
+    let mut name = None;
+    for attr in attrs {
+        match attr.name() {
+            gimli::constants::DW_AT_const_value => {
+                discriminant = Some(attr.udata_value());
+            }
+            gimli::constants::DW_AT_name => name = parse_string(attr.value(), unit_ref),
+            _ => {
+                panic!(
+                    "Unrecognized enum variant attr: {}",
+                    attr.name().static_string().unwrap_or("<unknown>")
+                );
+            }
+        }
+    }
+
+    if let Some(name) = name
+        && let Some(discriminant) = discriminant
+    {
+        Some(EnumerationVariant {
+            name,
+            discriminant,
+            kind: discriminant_kind,
+            offset: StructOffset(0),
+        })
+    } else {
+        None
+    }
+}
+
 fn parse_enum_variant<ENDIAN: Endianity>(
     attrs: &[gimli::Attribute<GimliReader<ENDIAN>>],
 ) -> Option<u64> {
@@ -1474,6 +1541,65 @@ fn update_enum_variant_member<ENDIAN: Endianity>(
             }
         }
     }
+}
+
+fn parse_enumeration_type<ENDIAN: Endianity>(
+    attrs: &[gimli::Attribute<GimliReader<ENDIAN>>],
+    namespace: &[String],
+    unit_ref: gimli::UnitRef<GimliReader<ENDIAN>>,
+) -> Option<Enumeration> {
+    let mut kind = None;
+    let mut name = None;
+    let mut size = None;
+    let mut offset = None;
+    for attr in attrs {
+        match attr.name() {
+            gimli::constants::DW_AT_type => kind = parse_type(attr, unit_ref),
+            gimli::constants::DW_AT_name => name = parse_string(attr.value(), unit_ref),
+            gimli::constants::DW_AT_byte_size => size = attr.udata_value(),
+            gimli::constants::DW_AT_alignment => {}
+            gimli::constants::DW_AT_data_member_location => offset = parse_offset(attr, unit_ref),
+            gimli::constants::DW_AT_accessibility => {}
+            gimli::constants::DW_AT_decl_line => {}
+            gimli::constants::DW_AT_decl_file => {}
+            gimli::constants::DW_AT_declaration => {}
+            gimli::constants::DW_AT_calling_convention => {}
+            _ => {
+                log::error!(
+                    "Unrecognized struct field: {}",
+                    attr.name().static_string().unwrap_or("<unknown>")
+                );
+            }
+        }
+    }
+    if let Some(name) = name
+        && let Some(size) = size
+        && let Some(discriminant_kind) = kind
+    {
+        // The namespace may be included in name and not through the DW_AT_namespace tag.
+        // Attempt to decode the namespace in the name.
+        let (decoded_namespace, name) = split_namespace_and_name(&name);
+
+        let namespace = if decoded_namespace.is_empty() {
+            namespace.join("::")
+        } else {
+            let decoded_namespace: Vec<String> =
+                decoded_namespace.split("::").map(str::to_string).collect();
+            let mut namespace = namespace.to_vec();
+            namespace.extend(decoded_namespace);
+            namespace.join("::")
+        };
+
+        return Some(Enumeration {
+            name: name.into(),
+            namespace,
+            size,
+            discriminant_offset: offset.unwrap_or(StructOffset(0)),
+            discriminant_kind,
+            variants: vec![],
+        });
+    }
+    None
 }
 
 fn parse_enum_discriminant<ENDIAN: Endianity>(
