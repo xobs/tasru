@@ -278,6 +278,7 @@ impl DebugInfo {
         if namespace.is_empty() {
             return Err(DebugTypeError::StructureNotFound {
                 owner: kind.to_owned(),
+                path: format!("0x{address:x}"),
             });
         }
 
@@ -306,6 +307,7 @@ impl DebugInfo {
 
         Err(DebugTypeError::StructureNotFound {
             owner: kind.to_owned(),
+            path: format!("0x{address:x}"),
         })
     }
 
@@ -339,6 +341,7 @@ impl DebugInfo {
 
         Err(DebugTypeError::StructureNotFound {
             owner: "".to_owned(),
+            path: format!("0x{address:x}"),
         })
     }
 
@@ -355,6 +358,7 @@ impl DebugInfo {
         if namespace.is_empty() {
             return Err(DebugTypeError::StructureNotFound {
                 owner: kind.to_owned(),
+                path: format!("0x{address:x}"),
             });
         }
 
@@ -380,6 +384,7 @@ impl DebugInfo {
 
         Err(DebugTypeError::EnumerationNotFound {
             owner: kind.to_owned(),
+            path: format!("0x{address:x}"),
         })
     }
 
@@ -396,6 +401,7 @@ impl DebugInfo {
         if namespace.is_empty() {
             return Err(DebugTypeError::StructureNotFound {
                 owner: kind.to_owned(),
+                path: format!("0x{address:x}"),
             });
         }
 
@@ -421,6 +427,7 @@ impl DebugInfo {
 
         Err(DebugTypeError::UnionNotFound {
             owner: kind.to_owned(),
+            path: format!("0x{address:x}"),
         })
     }
 
@@ -449,6 +456,7 @@ impl DebugInfo {
 
         Err(DebugTypeError::BaseTypeNotFound {
             owner: "".to_string(),
+            path: format!("0x{address:x}"),
         })
     }
 

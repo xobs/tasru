@@ -1168,7 +1168,7 @@ fn parse_offset<ENDIAN: Endianity>(
         }
         _ => {
             print!("Unsupported value:");
-            super::dump::attribute(&attr, unit_ref).ok();
+            super::dump::attribute(attr, unit_ref).ok();
             panic!();
         }
     }
@@ -1564,9 +1564,10 @@ fn parse_enumeration_type<ENDIAN: Endianity>(
             gimli::constants::DW_AT_decl_file => {}
             gimli::constants::DW_AT_declaration => {}
             gimli::constants::DW_AT_calling_convention => {}
+            gimli::constants::DW_AT_enum_class => {}
             _ => {
                 log::error!(
-                    "Unrecognized struct field: {}",
+                    "Unrecognized enumeration field: {}",
                     attr.name().static_string().unwrap_or("<unknown>")
                 );
             }

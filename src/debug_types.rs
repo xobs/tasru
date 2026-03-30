@@ -15,38 +15,56 @@ pub enum DebugTypeError {
     MemberNotFound {
         owner: String,
         member: String,
+        /// A list of all available members
+        available: Vec<String>,
+        path: String,
     },
     GenericNotFound {
         owner: String,
+        path: String,
     },
     StructureNotFound {
         owner: String,
+        path: String,
     },
     BaseTypeNotFound {
         owner: String,
+        path: String,
     },
     UnionNotFound {
         owner: String,
+        path: String,
     },
     VariantNotFound {
         owner: String,
         variant: String,
+        available: Vec<String>,
+        path: String,
     },
     EnumerationNotFound {
         owner: String,
+        path: String,
     },
-    ArrayNotFound(String),
+    ArrayNotFound {
+        value: String,
+        path: String,
+    },
     KindNotFound {
         owner: String,
         member: Option<String>,
+        path: String,
     },
     KindIncorrect {
         owner: String,
         member: Option<String>,
         attempted: String,
         actual: String,
+        path: String,
     },
-    NotRustSlice(String),
+    NotRustSlice {
+        owner: String,
+        path: String,
+    },
     ReadError,
     SizeError(u64),
     LocationMissing,
@@ -56,48 +74,95 @@ pub enum DebugTypeError {
 impl core::fmt::Display for DebugTypeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DebugTypeError::StructureNotFound { owner } => {
-                write!(f, "Structure for \"{}\" could not be found", owner)
+            DebugTypeError::StructureNotFound { owner, path } => {
+                write!(
+                    f,
+                    "Structure for \"{owner}\" could not be found at path \"{path}\""
+                )
             }
-            DebugTypeError::EnumerationNotFound { owner } => {
-                write!(f, "Enumeration for \"{}\" could not be found", owner)
+            DebugTypeError::EnumerationNotFound { owner, path } => {
+                write!(
+                    f,
+                    "Enumeration for \"{owner}\" could not be found at path \"{path}\""
+                )
             }
-            DebugTypeError::VariantNotFound { owner, variant } => write!(
-                f,
-                "Variant \"{}\" could not be found in enum \"{}\"",
-                variant, owner
-            ),
-            DebugTypeError::UnionNotFound { owner } => {
-                write!(f, "Union \"{}\" could not be found", owner)
+            DebugTypeError::VariantNotFound {
+                owner,
+                variant,
+                available,
+                path,
+            } => {
+                if available.is_empty() {
+                    write!(
+                        f,
+                        "Variant \"{variant}\" could not be found in enum \"{owner}\" at path \"{path}\""
+                    )
+                } else {
+                    write!(
+                        f,
+                        "Variant \"{variant}\" could not be found in enum \"{owner}\" at path \"{path}\", available variants: {}",
+                        available.join(", ")
+                    )
+                }
             }
-            DebugTypeError::BaseTypeNotFound { owner } => {
-                write!(f, "Base type \"{}\" could not be found", owner)
+            DebugTypeError::UnionNotFound { owner, path } => {
+                write!(f, "Union \"{owner}\" could not be found at path \"{path}\"")
             }
-            DebugTypeError::ArrayNotFound(s) => {
-                write!(f, "Array could not be found for item \"{}\"", s)
+            DebugTypeError::BaseTypeNotFound { owner, path } => {
+                write!(
+                    f,
+                    "Base type \"{owner}\" could not be found at path \"{path}\""
+                )
             }
-            DebugTypeError::MemberNotFound { owner, member } => {
-                write!(f, "Member \"{}\" not found in struct \"{}\"", member, owner)
+            DebugTypeError::ArrayNotFound { value, path } => {
+                write!(
+                    f,
+                    "Array could not be found for item \"{value}\" at path \"{path}\""
+                )
             }
-            DebugTypeError::GenericNotFound { owner } => {
-                write!(f, "Generic not found in struct \"{}\"", owner)
+            DebugTypeError::MemberNotFound {
+                owner,
+                member,
+                available,
+                path,
+            } => {
+                if available.is_empty() {
+                    write!(
+                        f,
+                        "Member \"{member}\" not found in struct \"{owner}\" at path \"{path}\""
+                    )
+                } else {
+                    write!(
+                        f,
+                        "Member \"{member}\" not found in struct \"{owner}\" at path \"{path}\", available members: {}",
+                        available.join(", ")
+                    )
+                }
+            }
+            DebugTypeError::GenericNotFound { owner, path } => {
+                write!(
+                    f,
+                    "Generic not found in struct \"{owner}\" at path \"{path}\""
+                )
             }
             DebugTypeError::VariableNotFound(v) => {
                 write!(f, "Variable \"{}\" could not be found", v)
             }
             DebugTypeError::SizeError(size) => write!(f, "Size \"{}\" is not valid", size),
-            DebugTypeError::KindNotFound { owner, member } => {
+            DebugTypeError::KindNotFound {
+                owner,
+                member,
+                path,
+            } => {
                 if let Some(member) = member {
                     write!(
                         f,
-                        "Type for element \"{}\" in struct \"{}\" could not be found",
-                        member, owner
+                        "Type for element \"{member}\" in struct \"{owner}\" could not be found at path \"{path}\""
                     )
                 } else {
                     write!(
                         f,
-                        "Type for anonymous member of struct \"{}\" could not be found",
-                        owner
+                        "Type for anonymous member of struct \"{owner}\" could not be found at path \"{path}\""
                     )
                 }
             }
@@ -106,23 +171,22 @@ impl core::fmt::Display for DebugTypeError {
                 member,
                 attempted,
                 actual,
+                path,
             } => {
                 if let Some(member) = member {
                     write!(
                         f,
-                        "Type for element \"{}\" in struct \"{}\" is \"{}\", not \"{}\"",
-                        member, owner, actual, attempted
+                        "Type for element \"{member}\" in struct \"{owner}\" is \"{actual}\", not \"{attempted}\" at path \"{path}\""
                     )
                 } else {
                     write!(
                         f,
-                        "Type for element \"{}\" \"{}\", not \"{}\"",
-                        owner, actual, attempted
+                        "Type for element \"{owner}\" \"{actual}\", not \"{attempted}\" at path \"{path}\""
                     )
                 }
             }
-            DebugTypeError::NotRustSlice(owner) => {
-                write!(f, "Type \"{}\" is not a Rust slice", owner)
+            DebugTypeError::NotRustSlice { owner, path } => {
+                write!(f, "Type \"{owner}\" is not a Rust slice at path \"{path}\"")
             }
             DebugTypeError::ReadError => {
                 write!(f, "An error occurred when reading memory from the target")
@@ -137,6 +201,14 @@ impl core::fmt::Display for DebugTypeError {
 
 impl core::error::Error for DebugTypeError {}
 
+/// Append this name to the parent string, if it's not empty
+pub fn make_path_name(parent: &str, this: &str) -> String {
+    if parent.is_empty() {
+        return this.to_owned();
+    }
+    format!("{parent}.{this}")
+}
+
 pub struct DebugArrayItem<'a> {
     unit: &'a unit_info::UnitInfo,
     info: &'a DebugInfo,
@@ -144,6 +216,8 @@ pub struct DebugArrayItem<'a> {
     offset: unit_info::StructOffset,
     kind: unit_info::DebugItem,
     parent_name: String,
+    /// The path we took to get to this item
+    path: String,
 }
 
 impl core::fmt::Debug for DebugArrayItem<'_> {
@@ -169,9 +243,13 @@ impl<'a> DebugArrayItem<'a> {
                 location: self.location,
                 offset: self.offset,
                 structure,
+                // Don't append the path item, since this is just casting this item
+                // as a struct and we already have the path defined.
+                path: self.path.clone(),
             })
             .ok_or(DebugTypeError::StructureNotFound {
                 owner: self.parent_name.clone(),
+                path: self.path.clone(),
             })
     }
 
@@ -185,8 +263,10 @@ impl<'a> DebugArrayItem<'a> {
                 location: self.location,
                 offset: self.offset,
                 enumeration,
+                path: self.path.clone(),
             })
             .ok_or_else(|| DebugTypeError::EnumerationNotFound {
+                path: self.path.clone(),
                 owner: self.parent_name.clone(),
             })
     }
@@ -196,6 +276,7 @@ impl<'a> DebugArrayItem<'a> {
             .base_type_from_item(self.kind)
             .map(|base_type| DebugBaseType::from_base_type(self.location, base_type))
             .ok_or_else(|| DebugTypeError::BaseTypeNotFound {
+                path: self.path.clone(),
                 owner: self.parent_name.clone(),
             })
     }
@@ -223,7 +304,10 @@ pub struct DebugArrayIterator<'a> {
     index: usize,
     count: usize,
     element_size: StructOffset,
+    /// The name of the item that encloses this object
     parent_name: String,
+    /// The full path we took to get here
+    path: String,
 }
 
 impl<'a> Iterator for DebugArrayIterator<'a> {
@@ -244,6 +328,7 @@ impl<'a> Iterator for DebugArrayIterator<'a> {
             offset: self.offset,
             kind: self.array.kind(),
             parent_name: self.parent_name.clone(),
+            path: make_path_name(&self.path, &format!("[{}]", self.index)),
         })
     }
 }
@@ -257,6 +342,8 @@ pub struct DebugArray<'a> {
     offset: unit_info::StructOffset,
     array: &'a unit_info::Array,
     parent_name: String,
+    /// The path we took to get to this item
+    path: String,
 }
 
 impl<'a> DebugArray<'a> {
@@ -269,6 +356,7 @@ impl<'a> DebugArray<'a> {
                 location: self.location,
                 offset: self.offset,
                 structure,
+                path: self.path.clone(),
             })
     }
 
@@ -281,6 +369,7 @@ impl<'a> DebugArray<'a> {
                 location: self.location,
                 offset: self.offset,
                 enumeration,
+                path: self.path.clone(),
             })
     }
 
@@ -288,6 +377,7 @@ impl<'a> DebugArray<'a> {
         let element_size = self.info.size_from_item(self.array.kind()).ok_or_else(|| {
             DebugTypeError::KindNotFound {
                 owner: self.parent_name.clone(),
+                path: self.path.clone(),
                 member: None,
             }
         })?;
@@ -302,6 +392,7 @@ impl<'a> DebugArray<'a> {
             count,
             element_size,
             parent_name: self.parent_name.clone(),
+            path: self.path.clone(),
         })
     }
 
@@ -425,6 +516,8 @@ pub struct DebugStructureMember<'a> {
     location: Option<unit_info::MemoryLocation>,
     offset: unit_info::StructOffset,
     structure_member: &'a unit_info::StructureMember,
+    /// The path that we took to get here
+    path: String,
 }
 
 impl<'a> DebugStructureMember<'a> {
@@ -438,6 +531,7 @@ impl<'a> DebugStructureMember<'a> {
                 member,
                 attempted,
                 actual: "structure".to_owned(),
+                path: self.path.clone(),
             }
         } else if self.info.enumeration_from_item(kind_index).is_some() {
             DebugTypeError::KindIncorrect {
@@ -445,6 +539,7 @@ impl<'a> DebugStructureMember<'a> {
                 member,
                 attempted,
                 actual: "enumeration".to_owned(),
+                path: self.path.clone(),
             }
         } else if self.info.pointer_from_item(kind_index).is_some() {
             DebugTypeError::KindIncorrect {
@@ -452,6 +547,7 @@ impl<'a> DebugStructureMember<'a> {
                 member,
                 attempted,
                 actual: "pointer".to_owned(),
+                path: self.path.clone(),
             }
         } else if self.info.array_from_item(kind_index).is_some() {
             DebugTypeError::KindIncorrect {
@@ -459,6 +555,7 @@ impl<'a> DebugStructureMember<'a> {
                 member,
                 attempted,
                 actual: "array".to_owned(),
+                path: self.path.clone(),
             }
         } else if self.info.union_from_item(kind_index).is_some() {
             DebugTypeError::KindIncorrect {
@@ -466,6 +563,7 @@ impl<'a> DebugStructureMember<'a> {
                 member,
                 attempted,
                 actual: "union".to_owned(),
+                path: self.path.clone(),
             }
         } else if self.info.base_type_from_item(kind_index).is_some() {
             DebugTypeError::KindIncorrect {
@@ -473,11 +571,13 @@ impl<'a> DebugStructureMember<'a> {
                 member,
                 attempted,
                 actual: "base type".to_owned(),
+                path: self.path.clone(),
             }
         } else {
             DebugTypeError::KindNotFound {
                 owner: self.parent_name.clone(),
                 member,
+                path: self.path.clone(),
             }
         }
     }
@@ -491,6 +591,7 @@ impl<'a> DebugStructureMember<'a> {
                 location: self.location.map(|l| l + self.structure_member.offset()),
                 offset: self.offset + self.structure_member.offset(),
                 structure,
+                path: self.path.clone(),
             })
             .ok_or_else(|| self.find_alternatives("structure"))
     }
@@ -504,6 +605,7 @@ impl<'a> DebugStructureMember<'a> {
                 location: self.location.map(|l| l + self.structure_member.offset()),
                 offset: self.offset + self.structure_member.offset(),
                 enumeration,
+                path: self.path.clone(),
             })
             .ok_or_else(|| self.find_alternatives("enumeration"))
     }
@@ -518,6 +620,7 @@ impl<'a> DebugStructureMember<'a> {
                 offset: self.offset + self.structure_member.offset(),
                 pointer,
                 parent_name: self.parent_name.clone(),
+                path: self.path.clone(),
             })
             .ok_or_else(|| self.find_alternatives("pointer"))
     }
@@ -532,6 +635,7 @@ impl<'a> DebugStructureMember<'a> {
                 offset: self.offset + self.structure_member.offset(),
                 array,
                 parent_name: self.parent_name.clone(),
+                path: self.path.clone(),
             })
             .ok_or_else(|| self.find_alternatives("array"))
     }
@@ -545,6 +649,7 @@ impl<'a> DebugStructureMember<'a> {
                 location: self.location.map(|l| l + self.structure_member.offset()),
                 offset: self.offset + self.structure_member.offset(),
                 union,
+                path: self.path.clone(),
             })
             .ok_or_else(|| self.find_alternatives("union"))
     }
@@ -592,6 +697,7 @@ impl core::fmt::Debug for DebugStructureMember<'_> {
 pub struct DebugGenericParameter<'a> {
     info: &'a DebugInfo,
     generic_parameter: &'a unit_info::GenericParameter,
+    path: String,
 }
 
 impl<'a> DebugGenericParameter<'a> {
@@ -605,6 +711,7 @@ impl<'a> DebugGenericParameter<'a> {
                     .name()
                     .unwrap_or_default()
                     .to_string(),
+                path: self.path.clone(),
             })
     }
 
@@ -619,6 +726,8 @@ pub struct DebugUnion<'a> {
     location: Option<unit_info::MemoryLocation>,
     offset: unit_info::StructOffset,
     union: &'a unit_info::Union,
+    /// The path we took to get here
+    path: String,
 }
 
 impl<'a> DebugUnion<'a> {
@@ -634,6 +743,7 @@ impl<'a> DebugUnion<'a> {
             location: Some(location),
             offset: unit_info::StructOffset::new(0),
             union,
+            path: String::new(),
         }
     }
 
@@ -647,9 +757,11 @@ impl<'a> DebugUnion<'a> {
                 offset: self.offset + structure_member.offset(),
                 parent_name: self.union.name().into(),
                 structure_member,
+                path: make_path_name(&self.path, name),
             })
             .ok_or_else(|| DebugTypeError::UnionNotFound {
                 owner: self.union.name().to_string(),
+                path: self.path.clone(),
             })
     }
 
@@ -705,9 +817,11 @@ pub struct DebugSliceStructureIter<'a> {
     location: Option<unit_info::MemoryLocation>,
     offset: unit_info::StructOffset,
     length: u64,
-    current: u64,
+    index: u64,
     size: unit_info::StructOffset,
     structure: &'a unit_info::Structure,
+    /// The path we took to get here
+    path: String,
 }
 
 impl DebugSliceStructureIter<'_> {
@@ -723,18 +837,19 @@ impl<'a> Iterator for DebugSliceStructureIter<'a> {
     type Item = DebugStructure<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current >= self.length {
+        if self.index >= self.length {
             return None;
         }
-        let current = unit_info::StructOffset::new(self.current);
+        let current = unit_info::StructOffset::new(self.index);
         let new = DebugStructure {
             unit: self.unit,
             info: self.info,
             location: self.location.map(|l| l + self.size * current),
             offset: self.offset + self.size * current,
             structure: self.structure,
+            path: make_path_name(&self.path, &format!("[{}]", self.index)),
         };
-        self.current += 1;
+        self.index += 1;
         Some(new)
     }
 }
@@ -748,6 +863,8 @@ pub struct DebugSlice<'a> {
     length: u64,
     data_ptr: &'a unit_info::Pointer,
     parent_name: String,
+    /// The path we took to get here
+    path: String,
 }
 
 impl<'a> DebugSlice<'a> {
@@ -755,12 +872,14 @@ impl<'a> DebugSlice<'a> {
         let Some(base_type) = self.info.base_type_from_item(self.data_ptr.kind()) else {
             return Err(DebugTypeError::BaseTypeNotFound {
                 owner: self.parent_name.clone(),
+                path: self.path.clone(),
             });
         };
         let Some(element_size) = self.info.size_from_item(self.data_ptr.kind()) else {
             return Err(DebugTypeError::KindNotFound {
                 owner: "<todo>".into(),
                 member: None,
+                path: self.path.clone(),
             });
         };
         Ok(DebugSliceBaseTypeIter {
@@ -778,6 +897,7 @@ impl<'a> DebugSlice<'a> {
             .structure_from_item(self.data_ptr.kind())
             .ok_or_else(|| DebugTypeError::StructureNotFound {
                 owner: self.parent_name.clone(),
+                path: self.path.clone(),
             })?;
         let element_size = self
             .info
@@ -785,6 +905,7 @@ impl<'a> DebugSlice<'a> {
             .ok_or_else(|| DebugTypeError::KindNotFound {
                 owner: self.parent_name.clone(),
                 member: None,
+                path: self.path.clone(),
             })?;
 
         Ok(DebugSliceStructureIter {
@@ -793,9 +914,10 @@ impl<'a> DebugSlice<'a> {
             location: self.location,
             offset: self.offset,
             length: self.length,
-            current: 0,
+            index: 0,
             size: element_size,
             structure,
+            path: self.path.clone(),
         })
     }
 }
@@ -808,6 +930,8 @@ pub struct DebugStructure<'a> {
     location: Option<unit_info::MemoryLocation>,
     offset: unit_info::StructOffset,
     structure: &'a unit_info::Structure,
+    /// The path that was taken to get to this item
+    path: String,
 }
 
 impl<'a> DebugStructure<'a> {
@@ -823,6 +947,7 @@ impl<'a> DebugStructure<'a> {
             location: Some(location),
             offset: unit_info::StructOffset::new(0),
             structure,
+            path: "".to_owned(),
         }
     }
 
@@ -836,10 +961,24 @@ impl<'a> DebugStructure<'a> {
                 offset: self.offset + structure_member.offset(),
                 parent_name: self.structure.name().into(),
                 structure_member,
+                path: make_path_name(&self.path, name),
             })
             .ok_or_else(|| DebugTypeError::MemberNotFound {
                 owner: self.structure.name().into(),
                 member: name.into(),
+                available: self
+                    .structure
+                    .members()
+                    .iter()
+                    .enumerate()
+                    .map(|(index, member)| {
+                        member
+                            .name()
+                            .map(|n| n.to_owned())
+                            .unwrap_or_else(|| format!("anonymous[{index}]"))
+                    })
+                    .collect(),
+                path: self.path.clone(),
             })
     }
 
@@ -854,6 +993,7 @@ impl<'a> DebugStructure<'a> {
                 offset: self.offset + structure_member.offset(),
                 parent_name: self.structure.name().into(),
                 structure_member,
+                path: make_path_name(&self.path, structure_member.name().unwrap_or("<anonymous>")),
             })
             .collect()
     }
@@ -865,6 +1005,7 @@ impl<'a> DebugStructure<'a> {
             .map(|generic_parameter| DebugGenericParameter {
                 info: self.info,
                 generic_parameter,
+                path: self.path.clone(),
             })
             .collect()
     }
@@ -876,7 +1017,10 @@ impl<'a> DebugStructure<'a> {
         memory_source: &mut S,
     ) -> Result<DebugSlice<'a>, DebugTypeError> {
         if self.structure.members().len() != 2 {
-            return Err(DebugTypeError::NotRustSlice(self.structure.name().into()));
+            return Err(DebugTypeError::NotRustSlice {
+                owner: self.structure.name().into(),
+                path: self.path.clone(),
+            });
         }
         let length = self
             .member_named("length")?
@@ -895,6 +1039,7 @@ impl<'a> DebugStructure<'a> {
             length,
             data_ptr: data_ptr.pointer,
             parent_name: self.structure.name().to_string(),
+            path: self.path.clone(),
         })
     }
 
@@ -939,6 +1084,8 @@ pub struct DebugPointer<'a> {
     offset: unit_info::StructOffset,
     pointer: &'a unit_info::Pointer,
     parent_name: String,
+    /// The path we took to get here
+    path: String,
 }
 
 impl<'a> DebugPointer<'a> {
@@ -951,9 +1098,11 @@ impl<'a> DebugPointer<'a> {
                 location: self.location,
                 offset: self.offset,
                 info: self.info,
+                path: self.path.clone(),
             })
             .ok_or_else(|| DebugTypeError::StructureNotFound {
                 owner: self.parent_name.clone(),
+                path: self.path.clone(),
             })
     }
 
@@ -1035,6 +1184,8 @@ pub struct DebugEnumerationVariant<'a> {
     location: Option<unit_info::MemoryLocation>,
     offset: unit_info::StructOffset,
     variant: &'a unit_info::EnumerationVariant,
+    /// The path we took to get here
+    path: String,
 }
 
 impl<'a> DebugEnumerationVariant<'a> {
@@ -1047,9 +1198,11 @@ impl<'a> DebugEnumerationVariant<'a> {
                 location: self.location.map(|l| l + self.variant.offset()),
                 offset: self.offset + self.variant.offset(),
                 structure,
+                path: self.path.clone(),
             })
             .ok_or_else(|| DebugTypeError::StructureNotFound {
                 owner: self.parent_name.clone(),
+                path: self.path.clone(),
             })
     }
 }
@@ -1077,6 +1230,8 @@ pub struct DebugEnumeration<'a> {
     location: Option<unit_info::MemoryLocation>,
     offset: unit_info::StructOffset,
     enumeration: &'a unit_info::Enumeration,
+    /// The path we took to get here
+    path: String,
 }
 
 impl<'a> DebugEnumeration<'a> {
@@ -1092,6 +1247,7 @@ impl<'a> DebugEnumeration<'a> {
             location: Some(location),
             offset: unit_info::StructOffset::new(0),
             enumeration,
+            path: String::new(),
         }
     }
 
@@ -1101,6 +1257,7 @@ impl<'a> DebugEnumeration<'a> {
             .base_type_from_item(self.enumeration.discriminant_kind())
             .ok_or_else(|| DebugTypeError::BaseTypeNotFound {
                 owner: self.enumeration.name().to_owned(),
+                path: self.path.clone(),
             })?;
         Ok(discriminant.size())
     }
@@ -1120,10 +1277,18 @@ impl<'a> DebugEnumeration<'a> {
                 offset: self.offset + variant.offset(),
                 variant,
                 parent_name: self.enumeration.name().to_owned(),
+                path: self.path.clone(),
             })
             .ok_or_else(|| DebugTypeError::VariantNotFound {
                 owner: self.enumeration.name().to_owned(),
                 variant: format!("{}", discriminant),
+                available: self
+                    .enumeration
+                    .variants()
+                    .iter()
+                    .map(|variant| variant.name().to_owned())
+                    .collect(),
+                path: self.path.clone(),
             })
     }
 
@@ -1138,10 +1303,18 @@ impl<'a> DebugEnumeration<'a> {
                 offset: self.offset + variant.offset(),
                 variant,
                 parent_name: self.enumeration.name().to_owned(),
+                path: make_path_name(&self.path, name),
             })
             .ok_or_else(|| DebugTypeError::VariantNotFound {
                 owner: self.enumeration.name().to_owned(),
                 variant: name.to_owned(),
+                available: self
+                    .enumeration
+                    .variants()
+                    .iter()
+                    .map(|variant| variant.name().to_owned())
+                    .collect(),
+                path: self.path.clone(),
             })
     }
 
@@ -1161,6 +1334,7 @@ impl<'a> DebugEnumeration<'a> {
                 location: self.location.map(|l| l + variant.offset()),
                 offset: self.offset + variant.offset(),
                 variant,
+                path: make_path_name(&self.path, variant.name()),
             })
         }
         Ok(variants)
@@ -1178,6 +1352,7 @@ impl<'a> DebugEnumeration<'a> {
             .ok_or_else(|| DebugTypeError::KindNotFound {
                 owner: self.enumeration.name().to_owned(),
                 member: None,
+                path: self.path.clone(),
             })?;
         let discriminant: u64 = match discriminant_size.0 {
             1 => memory_source
@@ -1222,6 +1397,8 @@ pub struct DebugVariable<'a> {
     unit: &'a unit_info::UnitInfo,
     info: &'a DebugInfo,
     variable: &'a unit_info::Variable,
+    /// The path that we took to get here
+    path: String,
 }
 
 impl<'a> DebugVariable<'a> {
@@ -1234,6 +1411,7 @@ impl<'a> DebugVariable<'a> {
             unit,
             info,
             variable,
+            path: String::new(),
         }
     }
 
@@ -1246,9 +1424,11 @@ impl<'a> DebugVariable<'a> {
                 location: Some(self.variable.location()),
                 offset: unit_info::StructOffset::new(0),
                 structure,
+                path: self.path.clone(),
             })
             .ok_or_else(|| DebugTypeError::StructureNotFound {
                 owner: self.variable.name().to_string(),
+                path: self.path.clone(),
             })
     }
 
@@ -1261,9 +1441,11 @@ impl<'a> DebugVariable<'a> {
                 location: Some(self.variable.location()),
                 offset: unit_info::StructOffset::new(0),
                 enumeration,
+                path: self.path.clone(),
             })
             .ok_or_else(|| DebugTypeError::EnumerationNotFound {
                 owner: self.variable.name().to_string(),
+                path: self.path.clone(),
             })
     }
 
@@ -1277,8 +1459,12 @@ impl<'a> DebugVariable<'a> {
                 offset: unit_info::StructOffset::new(0),
                 array,
                 parent_name: self.variable.name().to_string(),
+                path: self.path.clone(),
             })
-            .ok_or(DebugTypeError::ArrayNotFound(self.variable.name().into()))
+            .ok_or(DebugTypeError::ArrayNotFound {
+                value: self.variable.name().into(),
+                path: self.path.clone(),
+            })
     }
 }
 
