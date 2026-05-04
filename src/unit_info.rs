@@ -1466,7 +1466,7 @@ fn parse_enumerator<ENDIAN: Endianity>(
             }
             gimli::constants::DW_AT_name => name = parse_string(attr.value(), unit_ref),
             _ => {
-                panic!(
+                log::error!(
                     "Unrecognized enum variant attr: {}",
                     attr.name().static_string().unwrap_or("<unknown>")
                 );
@@ -1498,7 +1498,7 @@ fn parse_enum_variant<ENDIAN: Endianity>(
                 discriminant = attr.udata_value();
             }
             _ => {
-                panic!(
+                log::error!(
                     "Unrecognized enum variant attr: {}",
                     attr.name().static_string().unwrap_or("<unknown>")
                 );
@@ -1534,7 +1534,7 @@ fn update_enum_variant_member<ENDIAN: Endianity>(
             gimli::constants::DW_AT_decl_file => {}
             gimli::constants::DW_AT_decl_line => {}
             _ => {
-                panic!(
+                log::error!(
                     "Unrecognized enum variant member attr: {}",
                     attr.name().static_string().unwrap_or("<unknown>")
                 );
@@ -1693,9 +1693,10 @@ fn parse_pointer<ENDIAN: Endianity>(
         match attr.name() {
             gimli::constants::DW_AT_type => kind = parse_type(attr, unit_ref),
             gimli::constants::DW_AT_name => name = parse_string(attr.value(), unit_ref),
+            gimli::constants::DW_AT_byte_size => {}
             gimli::constants::DW_AT_address_class => {}
             _ => {
-                panic!(
+                log::error!(
                     "Unexpected pointer attr: {:?}",
                     attr.name().static_string().unwrap_or("<unknown>")
                 );
@@ -1722,7 +1723,7 @@ fn parse_base_type<ENDIAN: Endianity>(
             gimli::constants::DW_AT_byte_size => size = attr.udata_value(),
             gimli::constants::DW_AT_encoding => {}
             _ => {
-                panic!(
+                log::error!(
                     "Unexpected base_type attr: {:?}",
                     attr.name().static_string().unwrap_or("<unknown>")
                 );
