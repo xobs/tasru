@@ -5,7 +5,7 @@ use gimli::{DebugInfoOffset, SectionId};
 use crate::{
     DebugInfo,
     memory::Read,
-    unit_info::{self, BaseType, MemoryLocation, StructOffset},
+    unit_info::{self, MemoryLocation, StructOffset},
 };
 
 #[derive(Debug)]
