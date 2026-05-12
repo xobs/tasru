@@ -5,7 +5,7 @@ use gimli::{DebugInfoOffset, SectionId};
 use crate::{
     DebugInfo,
     memory::Read,
-    unit_info::{self, MemoryLocation, StructOffset},
+    unit_info::{self, BaseType, MemoryLocation, StructOffset},
 };
 
 #[derive(Debug)]
@@ -394,6 +394,14 @@ impl<'a> DebugArray<'a> {
             parent_name: self.parent_name.clone(),
             path: self.path.clone(),
         })
+    }
+
+    pub fn len(&self) -> usize {
+        self.count()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.count() == 0
     }
 
     pub fn reset_offset(&mut self) -> &Self {
@@ -1106,6 +1114,20 @@ impl<'a> DebugPointer<'a> {
             })
     }
 
+    pub fn base_type(&self) -> Result<DebugBaseType, DebugTypeError> {
+        self.info
+            .base_type_from_item(self.pointer.kind())
+            .map(|base_type| DebugBaseType {
+                size: base_type.size(),
+                name: base_type.name().to_owned(),
+                location: self.location,
+            })
+            .ok_or_else(|| DebugTypeError::BaseTypeNotFound {
+                owner: self.parent_name.clone(),
+                path: self.path.clone(),
+            })
+    }
+
     pub fn follow_unless_null<S: Read + ?Sized>(
         self,
         memory_source: &mut S,
@@ -1464,6 +1486,20 @@ impl<'a> DebugVariable<'a> {
             .ok_or(DebugTypeError::ArrayNotFound {
                 value: self.variable.name().into(),
                 path: self.path.clone(),
+            })
+    }
+
+    pub fn base_type(&self) -> Result<DebugBaseType, DebugTypeError> {
+        self.info
+            .base_type_from_item(self.variable.kind())
+            .map(|base_type| DebugBaseType {
+                location: Some(self.variable.location()),
+                size: base_type.size(),
+                name: base_type.name().to_owned(),
+            })
+            .ok_or(DebugTypeError::BaseTypeNotFound {
+                path: self.path.clone(),
+                owner: self.variable.name().to_string(),
             })
     }
 }
