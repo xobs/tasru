@@ -311,6 +311,27 @@ impl DebugInfo {
         })
     }
 
+    /// Consult all units to find a structure whose namespace and name
+    /// satisfy the predicate. Unlike [Self::structure_from_type_at_address],
+    /// this can find structures with empty namespaces (tuples, references),
+    /// and leaves name comparison to the caller.
+    pub fn find_structure_by_name<P>(&self, predicate: P) -> Option<&unit_info::Structure>
+    where
+        P: Fn(&str, &str) -> bool,
+    {
+        self.units
+            .iter()
+            .find_map(|unit| unit.find_structure(|s| predicate(s.namespace(), s.name())))
+    }
+
+    /// Consult all units to find a base type by name, returning its
+    /// [unit_info::DebugItem] so it can be used for casts and reads.
+    pub fn find_base_type_item(&self, name: &str) -> Option<unit_info::DebugItem> {
+        self.units
+            .iter()
+            .find_map(|unit| unit.find_base_type_item(|base_type| base_type.name() == name))
+    }
+
     pub fn structure_from_item_at_address(
         &self,
         target_item: &unit_info::DebugItem,
