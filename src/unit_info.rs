@@ -974,6 +974,32 @@ impl UnitInfo {
         self.cache.variables.iter().find(predicate)
     }
 
+    /// Find the first structure in this unit matching the predicate.
+    pub fn find_structure<P>(&self, predicate: P) -> Option<&Structure>
+    where
+        P: Fn(&Structure) -> bool,
+    {
+        self.cache.structures.iter().find(|s| predicate(s))
+    }
+
+    /// Find the first base type in this unit matching the predicate,
+    /// returning its [DebugItem].
+    pub fn find_base_type_item<P>(&self, predicate: P) -> Option<DebugItem>
+    where
+        P: Fn(&BaseType) -> bool,
+    {
+        self.cache
+            .base_type_address
+            .iter()
+            .find(|(_, index)| {
+                self.cache
+                    .base_types
+                    .get(index.0)
+                    .is_some_and(|base_type| predicate(base_type))
+            })
+            .map(|(item, _)| *item)
+    }
+
     pub fn structure_from_item(&self, location: DebugItem) -> Option<&Structure> {
         self.cache
             .structure_address
