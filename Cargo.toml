@@ -1,13 +1,13 @@
 [package]
 name = "tasru"
-version = "0.5.3"
+version = "0.6.0"
 edition = "2024"
 description = "A method to map and understand dwarf symbol information"
 license = "Apache-2.0"
 repository = "https://github.com/xobs/tasru"
 
 [dependencies]
-gimli = { version = "0.33", features = ["endian-reader", "read", "std"] }
+gimli = { version = "0.34", features = ["endian-reader", "read", "std"] }
 object = { version = "0.36", features = ["elf", "read_core", "std"] }
 rustc-demangle = "0.1.24"
 log = "0.4"
