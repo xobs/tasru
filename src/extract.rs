@@ -227,10 +227,13 @@ pub(crate) fn evaluate_expression<ENDIAN: Endianity>(
     expression: gimli::Expression<GimliReader<ENDIAN>>,
     encoding: gimli::Encoding,
 ) -> Result<ExpressionResult, ExtractError> {
-    fn evaluate_address(address: u64) -> ExpressionResult {
-        let location = if address >= u32::MAX as u64
-        /*&& !memory.supports_native_64bit_access()*/
-        {
+    let invalid = if encoding.address_size == 8 {
+        u64::MAX
+    } else {
+        u32::MAX as u64
+    };
+    let evaluate_address = |address: u64| -> ExpressionResult {
+        let location = if address >= invalid {
             VariableLocation::Error(format!(
                 "The memory location for this variable value ({:#010X}) is invalid. Please report this as a bug.",
                 address
@@ -239,7 +242,7 @@ pub(crate) fn evaluate_expression<ENDIAN: Endianity>(
             VariableLocation::Address(address)
         };
         ExpressionResult::Location(location)
-    }
+    };
 
     let pieces = expression_to_piece(expression, encoding)?;
 

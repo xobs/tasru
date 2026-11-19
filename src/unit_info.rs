@@ -151,9 +151,15 @@ pub struct Pointer {
     name: Option<String>,
     namespace: String,
     kind: DebugItem,
+    /// The width of the pointer in bytes.
+    size: u64,
 }
 
 impl Pointer {
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()
     }
@@ -1715,11 +1721,12 @@ fn parse_pointer<ENDIAN: Endianity>(
 ) -> Option<Pointer> {
     let mut name = None;
     let mut kind = None;
+    let mut size = None;
     for attr in attrs {
         match attr.name() {
             gimli::constants::DW_AT_type => kind = parse_type(attr, unit_ref),
             gimli::constants::DW_AT_name => name = parse_string(attr.value(), unit_ref),
-            gimli::constants::DW_AT_byte_size => {}
+            gimli::constants::DW_AT_byte_size => size = attr.udata_value(),
             gimli::constants::DW_AT_address_class => {}
             _ => {
                 log::error!(
@@ -1733,6 +1740,7 @@ fn parse_pointer<ENDIAN: Endianity>(
         name,
         namespace: namespace.join("::"),
         kind,
+        size: size.unwrap_or(unit_ref.unit.encoding().address_size.into()),
     })
 }
 

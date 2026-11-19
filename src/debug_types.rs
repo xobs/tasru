@@ -1160,10 +1160,12 @@ impl<'a> DebugPointer<'a> {
         memory_source: &mut S,
     ) -> Result<Self, DebugTypeError> {
         let location = self.location.ok_or(DebugTypeError::LocationMissing)?.0;
-        let target = memory_source
-            .read_u32(location)
-            .map_err(|_| DebugTypeError::ReadError)?;
-        self.location = Some(MemoryLocation(target.into()));
+        let target = match self.pointer.size() {
+            8 => memory_source.read_u64(location),
+            _ => memory_source.read_u32(location).map(u64::from),
+        }
+        .map_err(|_| DebugTypeError::ReadError)?;
+        self.location = Some(MemoryLocation(target));
         self.offset = StructOffset::new(0);
         Ok(self)
     }
