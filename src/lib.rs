@@ -326,10 +326,20 @@ impl DebugInfo {
 
     /// Consult all units to find a base type by name, returning its
     /// [unit_info::DebugItem] so it can be used for casts and reads.
+    ///
+    /// If there is no base type with that name, fall back to a typedef with that name that
+    /// resolves to a base type (newer Rust toolchains emit `usize` and `isize` as typedefs).
     pub fn find_base_type_item(&self, name: &str) -> Option<unit_info::DebugItem> {
         self.units
             .iter()
             .find_map(|unit| unit.find_base_type_item(|base_type| base_type.name() == name))
+            .or_else(|| {
+                self.units
+                    .iter()
+                    .filter_map(|unit| unit.typedef_item_from_name(name))
+                    .map(|item| self.resolve_typedefs(item))
+                    .find(|item| self.base_type_from_item(*item).is_some())
+            })
     }
 
     pub fn structure_from_item_at_address(
@@ -457,6 +467,7 @@ impl DebugInfo {
         target_item: &unit_info::DebugItem,
         address: u64,
     ) -> Result<DebugBaseType, DebugTypeError> {
+        let target_item = &self.resolve_typedefs(*target_item);
         for (item, index) in &self.symbol_unit_mapping {
             if target_item != item {
                 continue;
@@ -481,9 +492,30 @@ impl DebugInfo {
         })
     }
 
+    /// If `item` refers to a typedef, follow the chain of typedefs and return the item that it
+    /// ultimately aliases. Otherwise, return `item` unchanged.
+    ///
+    /// Newer Rust toolchains emit some types (e.g. `usize` and `isize`) as a `DW_TAG_typedef` of
+    /// a fixed-size base type rather than as a `DW_TAG_base_type`.
+    pub fn resolve_typedefs(&self, mut item: unit_info::DebugItem) -> unit_info::DebugItem {
+        // Bound the walk so that a malformed cycle of typedefs can't loop forever.
+        for _ in 0..32 {
+            let Some(target) = self
+                .symbol_unit_mapping
+                .get(&item)
+                .and_then(|unit| self.units[*unit].typedef_target(item))
+            else {
+                break;
+            };
+            item = target;
+        }
+        item
+    }
+
     /// Get the size of the specified debug item. Any debug item may be specified here,
     /// though some types may return `None` if their size couldn't be determined.
     pub fn size_from_item(&self, item: unit_info::DebugItem) -> Option<unit_info::StructOffset> {
+        let item = self.resolve_typedefs(item);
         self.symbol_unit_mapping
             .get(&item)
             .and_then(|var| self.units[*var].size_from_item(item))
@@ -492,6 +524,7 @@ impl DebugInfo {
     /// Given an item, return the Variable object. If the item is not a Variable, or couldn't
     /// be located, return `None`.
     pub fn variable_from_item(&self, item: unit_info::DebugItem) -> Option<&unit_info::Variable> {
+        let item = self.resolve_typedefs(item);
         self.symbol_unit_mapping
             .get(&item)
             .and_then(|var| self.units[*var].variable_from_item(item))
@@ -500,6 +533,7 @@ impl DebugInfo {
     /// Given an item, return the Structure object. If the item is not a Structure, or couldn't
     /// be located, return `None`.
     pub fn structure_from_item(&self, item: unit_info::DebugItem) -> Option<&unit_info::Structure> {
+        let item = self.resolve_typedefs(item);
         self.symbol_unit_mapping
             .get(&item)
             .and_then(|var| self.units[*var].structure_from_item(item))
@@ -511,6 +545,7 @@ impl DebugInfo {
         &self,
         item: unit_info::DebugItem,
     ) -> Option<&unit_info::Enumeration> {
+        let item = self.resolve_typedefs(item);
         self.symbol_unit_mapping
             .get(&item)
             .and_then(|var| self.units[*var].enumeration_from_item(item))
@@ -519,6 +554,7 @@ impl DebugInfo {
     /// Given an item, return the Pointer object. If the item is not a Pointer, or couldn't
     /// be located, return `None`.
     pub fn pointer_from_item(&self, item: unit_info::DebugItem) -> Option<&unit_info::Pointer> {
+        let item = self.resolve_typedefs(item);
         self.symbol_unit_mapping
             .get(&item)
             .and_then(|var| self.units[*var].pointer_from_item(item))
@@ -527,6 +563,7 @@ impl DebugInfo {
     /// Given an item, return the Array object. If the item is not an Array, or couldn't
     /// be located, return `None`.
     pub fn array_from_item(&self, item: unit_info::DebugItem) -> Option<&unit_info::Array> {
+        let item = self.resolve_typedefs(item);
         self.symbol_unit_mapping
             .get(&item)
             .and_then(|var| self.units[*var].array_from_item(item))
@@ -535,6 +572,7 @@ impl DebugInfo {
     /// Given an item, return the Union object. If the item is not a Union, or couldn't
     /// be located, return `None`.
     pub fn union_from_item(&self, item: unit_info::DebugItem) -> Option<&unit_info::Union> {
+        let item = self.resolve_typedefs(item);
         self.symbol_unit_mapping
             .get(&item)
             .and_then(|var| self.units[*var].union_from_item(item))
@@ -543,6 +581,7 @@ impl DebugInfo {
     /// Given an item, return the BaseType object. If the item is not a BaseType, or couldn't
     /// be located, return `None`.
     pub fn base_type_from_item(&self, item: unit_info::DebugItem) -> Option<&unit_info::BaseType> {
+        let item = self.resolve_typedefs(item);
         self.symbol_unit_mapping
             .get(&item)
             .and_then(|var| self.units[*var].base_type_from_item(item))
