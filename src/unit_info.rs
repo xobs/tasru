@@ -493,6 +493,12 @@ pub struct SymbolCache {
 
     /// Pointers from the union's offset to the union
     union_address: HashMap<DebugItem, EntryIndex>,
+
+    /// Mapping from a typedef's offset to the type that it aliases
+    typedef_address: HashMap<DebugItem, DebugItem>,
+
+    /// Pointers from a typedef's name to the first typedef with that name
+    typedef_names: HashMap<String, DebugItem>,
 }
 
 /// A struct containing information about a single compilation unit.
@@ -513,6 +519,7 @@ impl UnitInfo {
             .chain(self.cache.structure_address.keys())
             .chain(self.cache.union_address.keys())
             .chain(self.cache.variable_address.keys())
+            .chain(self.cache.typedef_address.keys())
             .copied()
             .collect()
     }
@@ -539,6 +546,8 @@ impl UnitInfo {
         let mut pointer_address = HashMap::new();
         let mut base_type_address = HashMap::new();
         let mut union_address = HashMap::new();
+        let mut typedef_address = HashMap::new();
+        let mut typedef_names: HashMap<String, DebugItem> = HashMap::new();
 
         let mut array_in_progress: Option<(PartialArray, DebugItem)> = None;
         let mut tag_parent_list = vec![];
@@ -878,6 +887,26 @@ impl UnitInfo {
                     base_types.push(base_type);
                 }
 
+                gimli::constants::DW_TAG_typedef => {
+                    let Some(kind) = abbrev
+                        .attr(gimli::constants::DW_AT_type)
+                        .and_then(|attr| parse_type(attr, unit_ref))
+                    else {
+                        continue;
+                    };
+                    let Some(offset) = abbrev.offset().to_debug_info_offset(&unit.header) else {
+                        continue;
+                    };
+                    let item = DebugItem::from_debug_info_offset(offset);
+                    if let Some(name) = abbrev
+                        .attr_value(DW_AT_name)
+                        .and_then(|name| parse_string(name, unit_ref))
+                    {
+                        typedef_names.entry(name).or_insert(item);
+                    }
+                    assert!(typedef_address.insert(item, kind).is_none());
+                }
+
                 gimli::constants::DW_TAG_namespace => {
                     let Some(name) = abbrev.attr_value(DW_AT_name) else {
                         log::error!("name not found for namespace!");
@@ -910,6 +939,8 @@ impl UnitInfo {
             pointer_address,
             base_type_address,
             union_address,
+            typedef_address,
+            typedef_names,
         };
 
         Some(Self {
@@ -1046,6 +1077,16 @@ impl UnitInfo {
             .union_address
             .get(&location)
             .and_then(|addr| self.cache.unions.get(addr.0))
+    }
+
+    /// Return the first typedef in this unit with the specified name.
+    pub fn typedef_item_from_name(&self, name: &str) -> Option<DebugItem> {
+        self.cache.typedef_names.get(name).copied()
+    }
+
+    /// If `location` is a typedef, return the item that it aliases.
+    pub fn typedef_target(&self, location: DebugItem) -> Option<DebugItem> {
+        self.cache.typedef_address.get(&location).copied()
     }
 
     pub fn size_from_item(&self, location: DebugItem) -> Option<StructOffset> {
